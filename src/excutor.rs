@@ -1,180 +1,292 @@
 use std::collections::HashMap;
 
-use crate::structs::{Behavior, Block, ExecuteEnv, Literal};
+use crate::structs::{BehaviorOrVar, Block, ExecuteEnv, Literal};
 
-macro_rules! initialize_vars {
-  ($env:expr, $vec:expr, $($tail:ident:$type:tt),*) => {
-    if $vec.len() != count_idents!($($tail)*) {
-      return Err(format!("Length of args must be {}.", count_idents!($($tail)*)));
-    }
-    let mut iter = $vec.into_iter();
-    $(
+fn predefined_procs() -> HashMap<String, BehaviorOrVar> {
+  let mut map: HashMap<String, BehaviorOrVar> = HashMap::new();
+
+  macro_rules! add_map {
+    ($name:expr, $callback:block; $($tail:ident:$type:tt),* ) => {{
+      map.insert($name.to_string(), BehaviorOrVar::Behavior(|exec_env, args| {
+        initialize_vars!($name, exec_env, args, $($tail:$type),*);
+        $callback
+      }))
+    }};
+    ($name:expr, $callback:block, $exec_env:ident, $args:ident; $($tail:ident:$type:tt),* ) => {{
+      map.insert($name.to_string(), BehaviorOrVar::Behavior(|$exec_env, $args| {
+        initialize_vars!($name, $exec_env, $args, $($tail:$type),*);
+        $callback
+      }))
+    }};
+  }
+
+  macro_rules! initialize_vars {
+    ($name: expr, $env:expr, $vec:expr,) => {};
+    ($name: expr, $env:expr, $vec:expr, $($tail:ident:$type:tt),+) => {
+      if $vec.len() != count_idents!($($tail)*) {
+        return Err(format!("Procesure {}: Length of args must be {}.", $name, count_idents!($($tail)*)));
+      }
+      let mut iter = $vec.into_iter();
+      $(
         let next = match iter.next() {
-            Some(val) => val,
-            None => panic!(),
+          Some(val) => val,
+          None => panic!(),
         };
-        declare!($env, next, $tail:$type);
-    )*
-  };
-}
+        declare!($name, $env, next, $tail:$type);
+      )*
+    };
+  }
 
-macro_rules! declare {
-    ($env:expr, $block:expr, $tail:ident:any) => {
-        let res = $block.execute($env);
-        let $tail = match res {
-            Ok(r) => r,
-            err => {
-                return err;
-            }
-        };
-    };
-    ($env:expr, $block:expr, $tail:ident:int) => {
-        let res = $block.execute($env);
-        let $tail = match res {
-            Ok(r) => {
-                if let Literal::Int(t) = r {
-                    t
-                } else {
-                    return Err(format!(
-                        "Executed result of arg {} must be int.",
-                        r.to_string()
-                    ));
-                }
-            }
-            err => {
-                return err;
-            }
-        };
-    };
-    ($env:expr, $block:expr, $tail:ident:str) => {
-        let res = $block.execute($env);
-        let $tail = match res {
-            Ok(r) => {
-                if let Literal::String(t) = r {
-                    t
-                } else {
-                    return Err(format!(
-                        "Executed result of arg {} must be string.",
-                        r.to_string()
-                    ));
-                }
-            }
-            err => {
-                return err;
-            }
-        };
-    };
-    ($env:expr, $block:expr, $tail:ident:block) => {
-        let $tail = $block;
-    };
-}
-
-macro_rules! count_idents {
-  () => { 0 };
-  ($_head:ident $($tail:tt)*) => { 1 + count_idents!($($tail)*) };
-}
-
-macro_rules! two_ope_int {
-    ($exp:expr) => {
-        |exec_env, args| {
-            initialize_vars!(exec_env, args, a:int, b:int);
-            Ok(Literal::Int($exp(a, b)))
+  macro_rules! declare {
+    ($name: expr, $env:expr, $block:expr, $tail:ident:any) => {
+      let res = $block.execute($env);
+      let $tail = match res {
+        Ok(r) => r,
+        err => {
+          return err;
         }
+      };
     };
-}
-
-fn predefined_procs() -> HashMap<String, Behavior> {
-    let mut map: HashMap<String, Behavior> = HashMap::new();
-
-    map.insert("+".to_string(), two_ope_int!(|a, b| { a + b }));
-    map.insert("-".to_string(), two_ope_int!(|a, b| { a - b }));
-    map.insert("*".to_string(), two_ope_int!(|a, b| { a * b }));
-    map.insert("/".to_string(), two_ope_int!(|a, b| { a / b }));
-    map.insert("%".to_string(), two_ope_int!(|a, b| { a % b }));
-    map.insert("print".to_string(), |exec_env, args| {
-        initialize_vars!(exec_env, args, a:str);
-
-        print!("{}", a);
-
-        Ok(Literal::Void)
-    });
-    map.insert("seq".to_string(), |exec_env, args| {
-        for arg in args {
-            arg.execute(exec_env)?;
+    ($name: expr, $env:expr, $block:expr, $tail:ident:int) => {
+      let res = $block.execute($env);
+      let $tail = match res {
+        Ok(r) => {
+          if let Literal::Int(t) = r {
+            t
+          } else {
+            return Err(format!("Procesure {}: Executed result of arg {} must be int.", $name, r.to_string()));
+          }
         }
-        Ok(Literal::Void)
-    });
-    map.insert("for".to_string(), |exec_env, args| {
-        initialize_vars!(exec_env, args, times:int, var:str, child:block);
-        for i in 0..times {
-            child.execute(exec_env)?;
+        err => {
+          return err;
         }
-        Ok(Literal::Void)
-    });
-    map.insert("ifn0".to_string(), |exec_env, args| {
-        initialize_vars!(exec_env, args, cond:any, then:block, els:block);
-        if let Literal::Int(t) = cond {
-            if t == 0 {
-                return els.execute(exec_env);
-            }
+      };
+    };
+    ($name: expr, $env:expr, $block:expr, $tail:ident:str) => {
+      let res = $block.execute($env);
+      let $tail = match res {
+        Ok(r) => {
+          if let Literal::String(t) = r {
+            t
+          } else {
+            return Err(format!("Executed result of arg {} must be string.", r.to_string()));
+          }
         }
-        then.execute(exec_env)
-    });
+        err => {
+          return err;
+        }
+      };
+    };
+    ($name: expr, $env:expr, $block:expr, $tail:ident:block) => {
+      let $tail = $block;
+    };
+  }
 
-    map
+  macro_rules! count_idents {
+    () => { 0 };
+    ($_head:ident $($tail:tt)*) => { 1 + count_idents!($($tail)*) };
+  }
+
+  add_map!("+", {Ok(Literal::Int(a + b))}; a:int, b:int);
+  add_map!("-", {Ok(Literal::Int(a - b))}; a:int, b:int);
+  add_map!("*", {Ok(Literal::Int(a * b))}; a:int, b:int);
+  add_map!("/", {Ok(Literal::Int(a / b))}; a:int, b:int);
+  add_map!("%", {Ok(Literal::Int(a % b))}; a:int, b:int);
+  add_map!("=", {Ok(Literal::Int(if a == b { 1 } else { 0 }))}; a:any, b:any);
+  add_map!("strcat", {Ok(Literal::String(format!("{}{}", a, b)))}; a:str, b:str);
+  add_map!("to_str", {Ok(Literal::String(a.to_string()))}; a:any);
+  add_map!("get", {exec_env.get_var(&name).ok_or(format!("Variable {} is not defined", name))}, exec_env, _args; name:str);
+  add_map!("set", {
+    exec_env.set_var(&name, &from);
+    Ok(Literal::Void)
+  }, exec_env, _args; name:str, from:any);
+  add_map!("print", {
+    print!("{}", a.to_string());
+    Ok(Literal::Void)
+  }; a:any);
+  add_map!("seq", {
+    let mut result = Literal::Void;
+    for arg in args {
+      result = arg.execute(exec_env)?;
+    }
+    Ok(result)
+  }, exec_env, args;);
+  add_map!("for", {
+    for i in 0..times {
+      exec_env.set_var(&var, &Literal::Int(i));
+      child.execute(exec_env)?;
+    }
+    Ok(Literal::Void)
+  }, exec_env, args; times:int, var:str, child:block);
+  add_map!("if0", {
+    if let Literal::Int(0) = cond {
+      then.execute(exec_env)
+    } else {
+      els.execute(exec_env)
+    }
+  }, exec_env, args; cond:any, then:block, els:block );
+  add_map!("ifn0", {
+    if let Literal::Int(0) = cond {
+      els.execute(exec_env)
+    } else {
+      then.execute(exec_env)
+    }
+  }, exec_env, args; cond:any, then:block, els:block );
+
+  map
 }
 
 pub fn execute(tree: Block) -> Result<Literal, String> {
-    let procs = predefined_procs();
-    let mut exec_env = ExecuteEnv::new(procs);
+  let procs = predefined_procs();
+  let mut exec_env = ExecuteEnv::new(procs);
 
-    tree.execute(&mut exec_env)
+  tree.execute(&mut exec_env)
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::structs::{Block, Literal};
+  use crate::structs::{Block, Literal};
 
-    use super::execute;
+  use super::execute;
 
-    #[test]
-    fn simple_summing() {
-        let result = execute(Block {
-            proc_name: "+".to_string(),
-            args: vec![
-                Box::new(Block {
-                    proc_name: "3".to_string(),
-                    args: vec![],
-                }),
-                Box::new(Block {
-                    proc_name: "4".to_string(),
-                    args: vec![],
-                }),
-            ],
-        });
+  macro_rules! b {
+    ($name:expr) => {
+      Box::new(Block {
+        proc_name: $name.to_owned(),
+        args: vec![],
+      })
+    };
+    ($name:expr, $args:expr) => {
+      Box::new(Block {
+        proc_name: $name.to_owned(),
+        args: $args,
+      })
+    };
+  }
 
-        assert_eq!(result, Ok(Literal::Int(7)))
-    }
-    #[test]
-    fn too_much_args() {
-        let result = execute(Block {
-            proc_name: "*".to_string(),
-            args: vec![
-                Box::new(Block {
-                    proc_name: "3".to_string(),
-                    args: vec![],
-                }),
-                Box::new(Block {
-                    proc_name: "4".to_string(),
-                    args: vec![],
-                }),
-                Box::new(Block {
-                    proc_name: "5".to_string(),
-                    args: vec![],
-                }),
-            ],
-        });
+  #[test]
+  fn simple_summing() {
+    let result = execute(*b!("+", vec![b!("3"), b!("4")]));
 
-        assert!(result.is_err())
-    }
+    assert_eq!(result, Ok(Literal::Int(7)))
+  }
+  #[test]
+  fn too_much_args() {
+    let result = execute(*b!("+", vec![b!("3"), b!("4"), b!("5")]));
+
+    assert!(result.is_err())
+  }
+
+  #[test]
+  fn fizzbuzz() {
+    let result = execute(*b!(
+      "seq",
+      vec![
+        b!("set", vec![b!("\"out\""), b!("\"\"")]),
+        b!(
+          "for",
+          vec![
+            b!("15"),
+            b!("\"i\""),
+            b!(
+              "set",
+              vec![
+                b!("\"out\""),
+                b!(
+                  "strcat",
+                  vec![
+                    b!("out"),
+                    b!(
+                      "if0",
+                      vec![
+                        b!("%", vec![b!("+", vec![b!("i"), b!("1")]), b!("15")]),
+                        b!("\"FizzBuzz\""),
+                        b!(
+                          "if0",
+                          vec![
+                            b!("%", vec![b!("+", vec![b!("i"), b!("1")]), b!("3")]),
+                            b!("\"Fizz\""),
+                            b!(
+                              "if0",
+                              vec![
+                                b!("%", vec![b!("+", vec![b!("i"), b!("1")]), b!("5")]),
+                                b!("\"Buzz\""),
+                                b!("to_str", vec![b!("+", vec![b!("i"), b!("1")])])
+                              ]
+                            )
+                          ]
+                        )
+                      ]
+                    )
+                  ]
+                )
+              ]
+            ),
+          ]
+        ),
+        b!("out")
+      ]
+    ));
+
+    assert_eq!(result, Ok(Literal::String("12Fizz4BuzzFizz78FizzBuzz11Fizz1314FizzBuzz".to_string())))
+  }
+
+  #[test]
+  fn fizzbuzz2() {
+    let result = execute(*b!(
+      "seq",
+      vec![
+        b!("set", vec![b!("\"out\""), b!("\"\"")]),
+        b!(
+          "for",
+          vec![
+            b!("15"),
+            b!("\"i\""),
+            b!(
+              "seq",
+              vec![
+                b!(
+                  "set",
+                  vec![
+                    b!("\"tmp\""),
+                    b!(
+                      "strcat",
+                      vec![
+                        b!(
+                          "ifn0",
+                          vec![b!("%", vec![b!("+", vec![b!("i"), b!("1")]), b!("3")]), b!("\"\""), b!("\"Fizz\"")]
+                        ),
+                        b!(
+                          "ifn0",
+                          vec![b!("%", vec![b!("+", vec![b!("i"), b!("1")]), b!("5")]), b!("\"\""), b!("\"Buzz\"")]
+                        )
+                      ]
+                    )
+                  ]
+                ),
+                b!(
+                  "set",
+                  vec![
+                    b!("\"tmp\""),
+                    b!(
+                      "ifn0",
+                      vec![
+                        b!("=", vec![b!("tmp"), b!("\"\"")]),
+                        b!("to_str", vec![b!("+", vec![b!("i"), b!("1")])]),
+                        b!("tmp")
+                      ]
+                    )
+                  ]
+                ),
+                b!("set", vec![b!("\"out\""), b!("strcat", vec![b!("out"), b!("tmp")])])
+              ]
+            )
+          ]
+        ),
+        b!("out")
+      ]
+    ));
+
+    assert_eq!(result, Ok(Literal::String("12Fizz4BuzzFizz78FizzBuzz11Fizz1314FizzBuzz".to_string())))
+  }
 }

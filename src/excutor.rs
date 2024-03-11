@@ -3,19 +3,6 @@ use std::collections::HashMap;
 use crate::structs::{Behavior, Block, ExecuteEnv, Literal};
 
 macro_rules! initialize_vars {
-  ($vec:expr, $($tail:ident),*) => {
-      if $vec.len() != count_idents!($($tail)*) {
-        return Err(format!("Length of args must be {}.", count_idents!($($tail)*)));
-      }
-      let mut iter = $vec.into_iter();
-      $(
-          let $tail = match iter.next() {
-              Some(val) => val,
-              None => panic!(),
-          };
-      )*
-  };
-
   ($env:expr, $vec:expr, $($tail:ident:$type:tt),*) => {
     if $vec.len() != count_idents!($($tail)*) {
       return Err(format!("Length of args must be {}.", count_idents!($($tail)*)));

@@ -11,3 +11,42 @@ fn main() {
 
   print!("{}", result.to_string());
 }
+
+#[cfg(test)]
+mod tests {
+  use std::{
+    cell::{Ref, RefCell},
+    rc::Rc,
+  };
+
+  use crate::{
+    compile,
+    excutor::{execute, execute_with_out_stream},
+    structs::Literal,
+  };
+
+  #[test]
+  fn a_plus_b() {
+    let out = Rc::new(RefCell::new("".to_owned()));
+    let out_ref = out.clone();
+    let out_stream = Box::new(move |msg| {
+      *out.borrow_mut() = msg;
+    });
+
+    let result = compile(vec![
+      "        ┌─────┐      ".to_owned(),
+      "        │print│      ".to_owned(),
+      "        └───┬─┘      ".to_owned(),
+      "        ┌───┴─┐      ".to_owned(),
+      "    ┌───┤  +  ├──┐   ".to_owned(),
+      "    │   └─────┘  │   ".to_owned(),
+      "┌───┴─┐      ┌───┴─┐ ".to_owned(),
+      "│  3  │      │  4  │ ".to_owned(),
+      "└─────┘      └─────┘ ".to_owned(),
+    ])
+    .and_then(|b| execute_with_out_stream(b, out_stream));
+
+    assert_eq!(Ok(Literal::Void), result);
+    assert_eq!("7", *out_ref.borrow());
+  }
+}

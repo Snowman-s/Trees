@@ -101,9 +101,9 @@ fn predefined_procs() -> HashMap<String, BehaviorOrVar> {
     Ok(Literal::Void)
   }, exec_env, _args; name:str, from:any);
   add_map!("print", {
-    print!("{}", a.to_string());
+    exec_env.print(a.to_string());
     Ok(Literal::Void)
-  }; a:any);
+  }, exec_env, args; a:any);
   add_map!("seq", {
     let mut result = Literal::Void;
     for arg in args {
@@ -137,8 +137,12 @@ fn predefined_procs() -> HashMap<String, BehaviorOrVar> {
 }
 
 pub fn execute(tree: Block) -> Result<Literal, String> {
+  execute_with_out_stream(tree, Box::new(|msg| print!("{}", msg)))
+}
+
+pub fn execute_with_out_stream(tree: Block, out_stream: Box<dyn FnMut(String)>) -> Result<Literal, String> {
   let procs = predefined_procs();
-  let mut exec_env = ExecuteEnv::new(procs);
+  let mut exec_env = ExecuteEnv::new(procs, out_stream);
 
   tree.execute(&mut exec_env)
 }

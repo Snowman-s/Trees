@@ -33,6 +33,7 @@ pub enum BehaviorOrVar {
 
 pub struct ExecuteEnv {
   namespace: HashMap<String, BehaviorOrVar>,
+  out_stream: Box<dyn FnMut(String)>,
 }
 
 fn to_int(str: &String) -> Option<u64> {
@@ -46,8 +47,8 @@ fn to_int(str: &String) -> Option<u64> {
 }
 
 impl ExecuteEnv {
-  pub fn new(namespace: HashMap<String, BehaviorOrVar>) -> ExecuteEnv {
-    ExecuteEnv { namespace }
+  pub fn new(namespace: HashMap<String, BehaviorOrVar>, out_stream: Box<dyn FnMut(String)>) -> ExecuteEnv {
+    ExecuteEnv { namespace, out_stream }
   }
 
   pub fn execute(&mut self, name: &String, args: &Vec<Box<Block>>) -> Result<Literal, String> {
@@ -77,6 +78,10 @@ impl ExecuteEnv {
 
   pub fn set_var(&mut self, name: &String, value: &Literal) {
     self.namespace.insert(name.to_string(), BehaviorOrVar::Var(value.clone()));
+  }
+
+  pub fn print(&mut self, msg: String) {
+    (self.out_stream)(msg);
   }
 }
 

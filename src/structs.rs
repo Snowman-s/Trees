@@ -18,6 +18,7 @@ impl ToString for Literal {
   }
 }
 
+#[derive(PartialEq, Eq, Debug, Clone)]
 pub struct Block {
   pub proc_name: String,
   pub args: Vec<Box<Block>>,

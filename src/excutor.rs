@@ -95,7 +95,7 @@ fn predefined_procs() -> HashMap<String, BehaviorOrVar> {
   add_map!("=", {Ok(Literal::Int(if a == b { 1 } else { 0 }))}; a:any, b:any);
   add_map!("strcat", {Ok(Literal::String(format!("{}{}", a, b)))}; a:str, b:str);
   add_map!("to_str", {Ok(Literal::String(a.to_string()))}; a:any);
-  add_map!("get", {exec_env.get_var(&name).ok_or(format!("Variable {} is not defined", name))}, exec_env, _args; name:str);
+  add_map!("get", {exec_env.get_var(&name)}, exec_env, _args; name:str);
   add_map!("set", {
     exec_env.set_var(&name, &from);
     Ok(Literal::Void)
@@ -132,6 +132,10 @@ fn predefined_procs() -> HashMap<String, BehaviorOrVar> {
       then.execute(exec_env)
     }
   }, exec_env, args; cond:any, then:block, els:block );
+  /*   add_map!("export", {
+    exec_env.export(&name)?;
+    Ok(Literal::Void)
+  }, exec_env, args; name:str );*/
 
   map
 }
@@ -144,7 +148,11 @@ pub fn execute_with_out_stream(tree: Block, out_stream: Box<dyn FnMut(String)>) 
   let procs = predefined_procs();
   let mut exec_env = ExecuteEnv::new(procs, out_stream);
 
-  tree.execute(&mut exec_env)
+  exec_env.new_scope();
+  let result = tree.execute(&mut exec_env);
+  exec_env.back_scope();
+
+  result
 }
 
 #[cfg(test)]
@@ -293,4 +301,24 @@ mod tests {
 
     assert_eq!(result, Ok(Literal::String("12Fizz4BuzzFizz78FizzBuzz11Fizz1314FizzBuzz".to_string())))
   }
+
+  /*#[test]
+  fn cannot_refer_inside() {
+    let result = execute(*b!("seq", vec![b!("seq", vec![b!("set", vec![b!("\"out\""), b!("3")])]), b!("out")]));
+
+    assert!(result.is_err());
+  }
+
+     #[test]
+  fn simple_export() {
+    let result = execute(*b!(
+      "seq",
+      vec![
+        b!("seq", vec![b!("set", vec![b!("\"out\""), b!("3")]), b!("export", vec![b!("out")])]),
+        b!("out")
+      ]
+    ));
+
+    assert_eq!(result, Ok(Literal::Int(3)))
+  }*/
 }

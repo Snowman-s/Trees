@@ -14,16 +14,9 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
-  use std::{
-    cell::{Ref, RefCell},
-    rc::Rc,
-  };
+  use std::{cell::RefCell, rc::Rc};
 
-  use crate::{
-    compile,
-    excutor::{execute, execute_with_out_stream},
-    structs::Literal,
-  };
+  use crate::{compile, excutor::execute_with_out_stream, structs::Literal};
 
   #[test]
   fn a_plus_b() {
@@ -48,5 +41,20 @@ mod tests {
 
     assert_eq!(Ok(Literal::Void), result);
     assert_eq!("7", *out_ref.borrow());
+  }
+
+  #[test]
+  fn fizzbuzz() {
+    let out = Rc::new(RefCell::new("".to_owned()));
+    let out_ref = out.clone();
+    let out_stream = Box::new(move |msg| {
+      *out.borrow_mut() = msg;
+    });
+
+    let code: Vec<String> = include_str!("test/fizzbuzz.tr").split("\n").map(|c| c.to_owned()).collect();
+    let result = compile(code).and_then(|b| execute_with_out_stream(b, out_stream));
+
+    assert_eq!(Ok(Literal::Void), result);
+    assert_eq!("12Fizz4BuzzFizz78FizzBuzz11Fizz1314FizzBuzz", *out_ref.borrow());
   }
 }

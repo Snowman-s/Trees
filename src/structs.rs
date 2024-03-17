@@ -12,7 +12,7 @@ impl ToString for Literal {
   fn to_string(&self) -> String {
     match self {
       Literal::Int(i) => i.to_string(),
-      Literal::String(s) => format!("\"{}\"", s),
+      Literal::String(s) => s.clone(),
       Literal::Void => "<Void>".to_string(),
     }
   }

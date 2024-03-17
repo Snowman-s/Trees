@@ -8,13 +8,17 @@ fn predefined_procs() -> HashMap<String, BehaviorOrVar> {
   macro_rules! add_map {
     ($name:expr, $callback:block; $($tail:ident:$type:tt),* ) => {{
       map.insert($name.to_string(), BehaviorOrVar::Behavior(|exec_env, args| {
+        exec_env.new_scope();
         initialize_vars!($name, exec_env, args, $($tail:$type),*);
+        exec_env.back_scope();
         $callback
       }))
     }};
     ($name:expr, $callback:block, $exec_env:ident, $args:ident; $($tail:ident:$type:tt),* ) => {{
       map.insert($name.to_string(), BehaviorOrVar::Behavior(|$exec_env, $args| {
+        $exec_env.new_scope();
         initialize_vars!($name, $exec_env, $args, $($tail:$type),*);
+        $exec_env.back_scope();
         $callback
       }))
     }};
@@ -69,7 +73,7 @@ fn predefined_procs() -> HashMap<String, BehaviorOrVar> {
           if let Literal::String(t) = r {
             t
           } else {
-            return Err(format!("Executed result of arg {} must be string.", r.to_string()));
+            return Err(format!("Procesure {}: Executed result of arg {} must be str.", $name, r.to_string()));
           }
         }
         err => {
@@ -78,7 +82,19 @@ fn predefined_procs() -> HashMap<String, BehaviorOrVar> {
       };
     };
     ($name: expr, $env:expr, $block:expr, $tail:ident:block) => {
-      let $tail = $block;
+      let res = $block.execute($env);
+      let $tail = match res {
+        Ok(r) => {
+          if let Literal::Block(b) = r {
+            b
+          } else {
+            return Err(format!("Procesure {}: Executed result of arg {} must be block.", $name, r.to_string()));
+          }
+        }
+        err => {
+          return err;
+        }
+      };
     };
   }
 
@@ -105,8 +121,21 @@ fn predefined_procs() -> HashMap<String, BehaviorOrVar> {
     Ok(Literal::Void)
   }, exec_env, args; a:any);
   add_map!("seq", {
+    exec_env.new_scope();
+
+    let mut exec_args: Vec<Block> = vec![];
+    for (i, args) in args.iter().enumerate() {
+      let r = args.execute(exec_env)?;
+
+      if let Literal::Block(b) = r {
+        exec_args.push(b);
+      } else {
+        return Err(format!("Procesure {}: Executed result of arg {} must be int.", i, r.to_string()));
+      }
+    }
+    exec_env.back_scope();
     let mut result = Literal::Void;
-    for arg in args {
+    for arg in exec_args {
       result = arg.execute(exec_env)?;
     }
     Ok(result)
@@ -132,10 +161,10 @@ fn predefined_procs() -> HashMap<String, BehaviorOrVar> {
       then.execute(exec_env)
     }
   }, exec_env, args; cond:any, then:block, els:block );
-  /*   add_map!("export", {
+  add_map!("export", {
     exec_env.export(&name)?;
     Ok(Literal::Void)
-  }, exec_env, args; name:str );*/
+  }, exec_env, args; name:str );
 
   map
 }
@@ -166,12 +195,31 @@ mod tests {
       Box::new(Block {
         proc_name: $name.to_owned(),
         args: vec![],
+        quote: false,
       })
     };
     ($name:expr, $args:expr) => {
       Box::new(Block {
         proc_name: $name.to_owned(),
         args: $args,
+        quote: false,
+      })
+    };
+  }
+
+  macro_rules! bq {
+    ($name:expr) => {
+      Box::new(Block {
+        proc_name: $name.to_owned(),
+        args: vec![],
+        quote: true,
+      })
+    };
+    ($name:expr, $args:expr) => {
+      Box::new(Block {
+        proc_name: $name.to_owned(),
+        args: $args,
+        quote: true,
       })
     };
   }
@@ -194,13 +242,13 @@ mod tests {
     let result = execute(*b!(
       "seq",
       vec![
-        b!("set", vec![b!("\"out\""), b!("\"\"")]),
-        b!(
+        bq!("set", vec![b!("\"out\""), b!("\"\"")]),
+        bq!(
           "for",
           vec![
             b!("15"),
             b!("\"i\""),
-            b!(
+            bq!(
               "set",
               vec![
                 b!("\"out\""),
@@ -212,18 +260,18 @@ mod tests {
                       "if0",
                       vec![
                         b!("%", vec![b!("+", vec![b!("i"), b!("1")]), b!("15")]),
-                        b!("\"FizzBuzz\""),
-                        b!(
+                        bq!("\"FizzBuzz\""),
+                        bq!(
                           "if0",
                           vec![
                             b!("%", vec![b!("+", vec![b!("i"), b!("1")]), b!("3")]),
-                            b!("\"Fizz\""),
-                            b!(
+                            bq!("\"Fizz\""),
+                            bq!(
                               "if0",
                               vec![
                                 b!("%", vec![b!("+", vec![b!("i"), b!("1")]), b!("5")]),
-                                b!("\"Buzz\""),
-                                b!("to_str", vec![b!("+", vec![b!("i"), b!("1")])])
+                                bq!("\"Buzz\""),
+                                bq!("to_str", vec![b!("+", vec![b!("i"), b!("1")])])
                               ]
                             )
                           ]
@@ -236,7 +284,7 @@ mod tests {
             ),
           ]
         ),
-        b!("out")
+        bq!("out")
       ]
     ));
 
@@ -248,16 +296,16 @@ mod tests {
     let result = execute(*b!(
       "seq",
       vec![
-        b!("set", vec![b!("\"out\""), b!("\"\"")]),
-        b!(
+        bq!("set", vec![b!("\"out\""), b!("\"\"")]),
+        bq!(
           "for",
           vec![
             b!("15"),
             b!("\"i\""),
-            b!(
+            bq!(
               "seq",
               vec![
-                b!(
+                bq!(
                   "set",
                   vec![
                     b!("\"tmp\""),
@@ -266,17 +314,17 @@ mod tests {
                       vec![
                         b!(
                           "ifn0",
-                          vec![b!("%", vec![b!("+", vec![b!("i"), b!("1")]), b!("3")]), b!("\"\""), b!("\"Fizz\"")]
+                          vec![b!("%", vec![b!("+", vec![b!("i"), b!("1")]), b!("3")]), bq!("\"\""), bq!("\"Fizz\"")]
                         ),
                         b!(
                           "ifn0",
-                          vec![b!("%", vec![b!("+", vec![b!("i"), b!("1")]), b!("5")]), b!("\"\""), b!("\"Buzz\"")]
+                          vec![b!("%", vec![b!("+", vec![b!("i"), b!("1")]), b!("5")]), bq!("\"\""), bq!("\"Buzz\"")]
                         )
                       ]
                     )
                   ]
                 ),
-                b!(
+                bq!(
                   "set",
                   vec![
                     b!("\"tmp\""),
@@ -284,41 +332,41 @@ mod tests {
                       "ifn0",
                       vec![
                         b!("=", vec![b!("tmp"), b!("\"\"")]),
-                        b!("to_str", vec![b!("+", vec![b!("i"), b!("1")])]),
-                        b!("tmp")
+                        bq!("to_str", vec![b!("+", vec![b!("i"), b!("1")])]),
+                        bq!("tmp")
                       ]
                     )
                   ]
                 ),
-                b!("set", vec![b!("\"out\""), b!("strcat", vec![b!("out"), b!("tmp")])])
+                bq!("set", vec![b!("\"out\""), b!("strcat", vec![b!("out"), b!("tmp")])])
               ]
             )
           ]
         ),
-        b!("out")
+        bq!("out")
       ]
     ));
 
     assert_eq!(result, Ok(Literal::String("12Fizz4BuzzFizz78FizzBuzz11Fizz1314FizzBuzz".to_string())))
   }
 
-  /*#[test]
+  #[test]
   fn cannot_refer_inside() {
     let result = execute(*b!("seq", vec![b!("seq", vec![b!("set", vec![b!("\"out\""), b!("3")])]), b!("out")]));
 
     assert!(result.is_err());
   }
 
-     #[test]
+  #[test]
   fn simple_export() {
     let result = execute(*b!(
       "seq",
       vec![
-        b!("seq", vec![b!("set", vec![b!("\"out\""), b!("3")]), b!("export", vec![b!("out")])]),
-        b!("out")
+        bq!("seq", vec![bq!("set", vec![b!("\"out\""), b!("3")]), bq!("export", vec![b!("\"out\"")])]),
+        bq!("out")
       ]
     ));
 
     assert_eq!(result, Ok(Literal::Int(3)))
-  }*/
+  }
 }

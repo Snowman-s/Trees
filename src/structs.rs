@@ -5,6 +5,7 @@ use std::{collections::HashMap, sync::OnceLock};
 pub enum Literal {
   Int(u64),
   String(String),
+  Block(Block),
   Void,
 }
 
@@ -13,6 +14,7 @@ impl ToString for Literal {
     match self {
       Literal::Int(i) => i.to_string(),
       Literal::String(s) => s.clone(),
+      Literal::Block(b) => format!("Block {}", b.proc_name),
       Literal::Void => "<Void>".to_string(),
     }
   }
@@ -22,6 +24,7 @@ impl ToString for Literal {
 pub struct Block {
   pub proc_name: String,
   pub args: Vec<Box<Block>>,
+  pub quote: bool,
 }
 
 pub type Behavior = fn(exec_env: &mut ExecuteEnv, args: &Vec<Box<Block>>) -> Result<Literal, String>;
@@ -117,18 +120,18 @@ impl ExecuteEnv {
     };
   }
 
-  /*   pub fn export(&mut self, name: &String) -> Result<(), String> {
+  pub fn export(&mut self, name: &String) -> Result<(), String> {
     if let Some(value) = self.find_namespace(name) {
       let value = value.clone();
-      let cont_index = (self.contexts.len() - 2).clone();
-      if let Some(context) = self.contexts.get_mut(cont_index) {
+      let cont_index = (self.scopes.len() - 2).clone();
+      if let Some(context) = self.scopes.get_mut(cont_index) {
         context.namespace.insert(name.clone(), value.clone());
       };
       Ok(())
     } else {
       Err(format!("Variable {} is not defined", name))
     }
-  }*/
+  }
 
   pub fn print(&mut self, msg: String) {
     (self.out_stream)(msg);
@@ -137,6 +140,12 @@ impl ExecuteEnv {
 
 impl Block {
   pub fn execute(&self, exec_env: &mut ExecuteEnv) -> Result<Literal, String> {
-    exec_env.execute(&self.proc_name, &self.args)
+    if self.quote {
+      let mut cloned = self.clone();
+      cloned.quote = false;
+      Ok(Literal::Block(cloned))
+    } else {
+      exec_env.execute(&self.proc_name, &self.args)
+    }
   }
 }

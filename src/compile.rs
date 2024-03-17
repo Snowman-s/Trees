@@ -9,7 +9,7 @@ struct CompilingBlock {
   y: usize,
   width: usize,
   height: usize,
-  up_plug: Option<Plug>,
+  block_plug: Option<BlockPlug>,
   arg_plugs: Vec<Plug>,
   args: Vec<usize>,
 }
@@ -19,6 +19,13 @@ struct Plug {
   x: usize,
   y: usize,
   ori: Orientation,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct BlockPlug {
+  x: usize,
+  y: usize,
+  quote: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -34,6 +41,7 @@ impl CompilingBlock {
     Block {
       proc_name: self.proc_name.clone(),
       args: self.args.clone().into_iter().map(|t| Box::new(blocks[t].to_block(blocks))).collect(),
+      quote: if let Some(p) = &self.block_plug { p.quote } else { false },
     }
   }
 }
@@ -54,13 +62,15 @@ fn find_a_block(code: &Vec<Vec<String>>, x: usize, y: usize) -> Option<Compiling
   // 右回り
   // 1から始める
   let mut width1 = 1;
-  while char!(width1, 0) == "─" || char!(width1, 0) == "┴" {
+  while char!(width1, 0) == "─" || char!(width1, 0) == "┴" || char!(width1, 0) == "•" {
     if char!(width1, 0) == "┴" {
-      up_plug = Some(Plug {
+      up_plug = Some(BlockPlug {
         x: x + width1,
         y,
-        ori: Orientation::Up,
+        quote: false,
       });
+    } else if char!(width1, 0) == "•" {
+      up_plug = Some(BlockPlug { x: x + width1, y, quote: true });
     }
     width1 += 1;
   }
@@ -139,7 +149,7 @@ fn find_a_block(code: &Vec<Vec<String>>, x: usize, y: usize) -> Option<Compiling
     y,
     width: width1 + 1,
     height: height1 + 1,
-    up_plug,
+    block_plug: up_plug,
     arg_plugs,
   })
 }
@@ -212,7 +222,7 @@ fn find_next_edge(code: &Vec<Vec<String>>, x: &usize, y: &usize, ori: &Orientati
 
 fn connect_blocks(code: &Vec<Vec<String>>, blocks: &Vec<CompilingBlock>) -> Result<Block, String> {
   let mut blocks_clone = blocks.clone();
-  let head_candinates: Vec<usize> = blocks.into_iter().enumerate().filter_map(|(i, block)| if block.up_plug.is_some() { None } else { Some(i) }).collect();
+  let head_candinates: Vec<usize> = blocks.into_iter().enumerate().filter_map(|(i, block)| if block.block_plug.is_some() { None } else { Some(i) }).collect();
 
   if head_candinates.len() != 1 {
     return Err(format!(
@@ -247,12 +257,11 @@ fn connect_blocks(code: &Vec<Vec<String>>, blocks: &Vec<CompilingBlock>) -> Resu
         .into_iter()
         .enumerate()
         .find(|(_, b)| {
-          b.up_plug
-            == Some(Plug {
-              x: mut_x.clone(),
-              y: mut_y.clone(),
-              ori: Orientation::Up,
-            })
+          if let Some(p) = &b.block_plug {
+            p.x == mut_x.clone() && p.y == mut_y.clone()
+          } else {
+            false
+          }
         })
         .ok_or(format!("No block-plug found at ({}, {})", mut_x, mut_y))?;
 
@@ -278,7 +287,7 @@ pub fn compile(code: Vec<String>) -> Result<Block, String> {
 #[cfg(test)]
 mod tests {
   use crate::{
-    compile::{find_blocks, CompilingBlock, Orientation, Plug},
+    compile::{find_blocks, BlockPlug, CompilingBlock, Orientation, Plug},
     structs::Block,
   };
 
@@ -305,7 +314,8 @@ mod tests {
     assert_eq!(
       Ok(Block {
         proc_name: "abc".to_owned(),
-        args: vec![]
+        args: vec![],
+        quote: false
       }),
       block
     );
@@ -325,7 +335,8 @@ mod tests {
     assert_eq!(
       Ok(Block {
         proc_name: "abc\ndef g".to_owned(),
-        args: vec![]
+        args: vec![],
+        quote: false
       }),
       block
     );
@@ -350,7 +361,7 @@ mod tests {
           y: 1,
           width: 9,
           height: 3,
-          up_plug: None,
+          block_plug: None,
           arg_plugs: vec![Plug {
             x: 8,
             y: 3,
@@ -364,11 +375,7 @@ mod tests {
           y: 4,
           width: 8,
           height: 3,
-          up_plug: Some(Plug {
-            x: 8,
-            y: 4,
-            ori: Orientation::Up
-          }),
+          block_plug: Some(BlockPlug { x: 8, y: 4, quote: false }),
           arg_plugs: vec![],
           args: vec![]
         }
@@ -394,8 +401,10 @@ mod tests {
         proc_name: "abc".to_owned(),
         args: vec![Box::new(Block {
           proc_name: "def".to_owned(),
-          args: vec![]
-        })]
+          args: vec![],
+          quote: false
+        })],
+        quote: false
       }),
       block
     );

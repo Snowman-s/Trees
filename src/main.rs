@@ -57,4 +57,19 @@ mod tests {
     assert_eq!(Ok(Literal::Void), result);
     assert_eq!("12Fizz4BuzzFizz78FizzBuzz11Fizz1314FizzBuzz", *out_ref.borrow());
   }
+
+  #[test]
+  fn defproc() {
+    let out = Rc::new(RefCell::new("".to_owned()));
+    let out_ref = out.clone();
+    let out_stream = Box::new(move |msg| {
+      *out.borrow_mut() = msg;
+    });
+
+    let code: Vec<String> = include_str!("test/defproc.tr").split("\n").map(|c| c.to_owned()).collect();
+    let result = compile(code).and_then(|b| execute_with_out_stream(b, out_stream));
+
+    assert_eq!(Ok(Literal::Void), result);
+    assert_eq!("6", *out_ref.borrow());
+  }
 }

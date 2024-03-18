@@ -27,11 +27,12 @@ pub struct Block {
   pub quote: bool,
 }
 
-pub type Behavior = fn(exec_env: &mut ExecuteEnv, args: &Vec<Box<Block>>) -> Result<Literal, String>;
+pub type Behavior = fn(&mut ExecuteEnv, &Vec<Literal>) -> Result<Literal, String>;
 
 #[derive(Clone)]
 pub enum BehaviorOrVar {
   Behavior(Behavior),
+  BlockBehavior(Block),
   Var(Literal),
 }
 
@@ -80,7 +81,7 @@ impl ExecuteEnv {
     self.scopes.iter_mut().rev().find(|scope| scope.namespace.contains_key(name))
   }
 
-  fn find_namespace(&mut self, name: &String) -> Option<&BehaviorOrVar> {
+  fn find_namespace(&self, name: &String) -> Option<&BehaviorOrVar> {
     self.find_scope(name).and_then(|c| c.namespace.get(name))
   }
   fn find_namespace_mut(&mut self, name: &String) -> Option<&mut BehaviorOrVar> {
@@ -88,9 +89,24 @@ impl ExecuteEnv {
   }
 
   pub fn execute(&mut self, name: &String, args: &Vec<Box<Block>>) -> Result<Literal, String> {
-    if let Some(behavior_or_var) = self.find_namespace_mut(name) {
+    self.new_scope();
+    let mut exec_args = vec![];
+    for arg in args {
+      exec_args.push(arg.execute(self)?);
+    }
+    self.back_scope();
+
+    if let Some(behavior_or_var) = self.find_namespace(name) {
+      let behavior_or_var = behavior_or_var.clone();
       match behavior_or_var {
-        BehaviorOrVar::Behavior(be) => be(self, args),
+        BehaviorOrVar::Behavior(be) => be(self, &exec_args),
+        BehaviorOrVar::BlockBehavior(block) => {
+          for (i, arg) in exec_args.iter().enumerate() {
+            self.set_var(&format!("${}", i), arg);
+          }
+
+          block.execute(self)
+        }
         BehaviorOrVar::Var(var) => Ok(var.clone()),
       }
     } else if name.starts_with("\"") && name.ends_with("\"") {
@@ -117,6 +133,16 @@ impl ExecuteEnv {
       scope.namespace.insert(name.to_string(), BehaviorOrVar::Var(value.clone()));
     } else {
       self.scopes.last_mut().unwrap().namespace.insert(name.to_string(), BehaviorOrVar::Var(value.clone()));
+    };
+  }
+
+  pub fn def_proc(&mut self, name: &String, block: &Block) {
+    let behavior = BehaviorOrVar::BlockBehavior(block.clone());
+
+    if let Some(scope) = self.find_scope_mut(name) {
+      scope.namespace.insert(name.to_string(), behavior);
+    } else {
+      self.scopes.last_mut().unwrap().namespace.insert(name.to_string(), behavior);
     };
   }
 

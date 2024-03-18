@@ -7,18 +7,14 @@ fn predefined_procs() -> HashMap<String, BehaviorOrVar> {
 
   macro_rules! add_map {
     ($name:expr, $callback:block; $($tail:ident:$type:tt),* ) => {{
-      map.insert($name.to_string(), BehaviorOrVar::Behavior(|exec_env, args| {
-        exec_env.new_scope();
-        initialize_vars!($name, exec_env, args, $($tail:$type),*);
-        exec_env.back_scope();
+      map.insert($name.to_string(), BehaviorOrVar::Behavior(|_exec_env, args| {
+        initialize_vars!($name, _exec_env, args, $($tail:$type),*);
         $callback
       }))
     }};
     ($name:expr, $callback:block, $exec_env:ident, $args:ident; $($tail:ident:$type:tt),* ) => {{
       map.insert($name.to_string(), BehaviorOrVar::Behavior(|$exec_env, $args| {
-        $exec_env.new_scope();
         initialize_vars!($name, $exec_env, $args, $($tail:$type),*);
-        $exec_env.back_scope();
         $callback
       }))
     }};
@@ -43,57 +39,21 @@ fn predefined_procs() -> HashMap<String, BehaviorOrVar> {
 
   macro_rules! declare {
     ($name: expr, $env:expr, $block:expr, $tail:ident:any) => {
-      let res = $block.execute($env);
-      let $tail = match res {
-        Ok(r) => r,
-        err => {
-          return err;
-        }
-      };
+      let $tail = $block;
     };
     ($name: expr, $env:expr, $block:expr, $tail:ident:int) => {
-      let res = $block.execute($env);
-      let $tail = match res {
-        Ok(r) => {
-          if let Literal::Int(t) = r {
-            t
-          } else {
-            return Err(format!("Procesure {}: Executed result of arg {} must be int.", $name, r.to_string()));
-          }
-        }
-        err => {
-          return err;
-        }
+      let Literal::Int($tail) = $block else {
+        return Err(format!("Procesure {}: Executed result of arg {} must be int.", $name, $block.to_string()));
       };
     };
     ($name: expr, $env:expr, $block:expr, $tail:ident:str) => {
-      let res = $block.execute($env);
-      let $tail = match res {
-        Ok(r) => {
-          if let Literal::String(t) = r {
-            t
-          } else {
-            return Err(format!("Procesure {}: Executed result of arg {} must be str.", $name, r.to_string()));
-          }
-        }
-        err => {
-          return err;
-        }
+      let Literal::String($tail) = $block else {
+        return Err(format!("Procesure {}: Executed result of arg {} must be str.", $name, $block.to_string()));
       };
     };
     ($name: expr, $env:expr, $block:expr, $tail:ident:block) => {
-      let res = $block.execute($env);
-      let $tail = match res {
-        Ok(r) => {
-          if let Literal::Block(b) = r {
-            b
-          } else {
-            return Err(format!("Procesure {}: Executed result of arg {} must be block.", $name, r.to_string()));
-          }
-        }
-        err => {
-          return err;
-        }
+      let Literal::Block($tail) = $block else {
+        return Err(format!("Procesure {}: Executed result of arg {} must be block.", $name, $block.to_string()));
       };
     };
   }
@@ -121,19 +81,14 @@ fn predefined_procs() -> HashMap<String, BehaviorOrVar> {
     Ok(Literal::Void)
   }, exec_env, args; a:any);
   add_map!("seq", {
-    exec_env.new_scope();
-
-    let mut exec_args: Vec<Block> = vec![];
-    for (i, args) in args.iter().enumerate() {
-      let r = args.execute(exec_env)?;
-
-      if let Literal::Block(b) = r {
-        exec_args.push(b);
+    let mut exec_args: Vec<&Block> = vec![];
+    for (i, arg) in args.iter().enumerate() {
+      if let Literal::Block(b) = arg {
+        exec_args.push(&b);
       } else {
-        return Err(format!("Procesure {}: Executed result of arg {} must be int.", i, r.to_string()));
+        return Err(format!("Procesure {}: Executed result of arg {} must be block.", i, arg.to_string()));
       }
     }
-    exec_env.back_scope();
     let mut result = Literal::Void;
     for arg in exec_args {
       result = arg.execute(exec_env)?;
@@ -141,7 +96,7 @@ fn predefined_procs() -> HashMap<String, BehaviorOrVar> {
     Ok(result)
   }, exec_env, args;);
   add_map!("for", {
-    for i in 0..times {
+    for i in 0..*times {
       exec_env.set_var(&var, &Literal::Int(i));
       child.execute(exec_env)?;
     }
@@ -161,6 +116,10 @@ fn predefined_procs() -> HashMap<String, BehaviorOrVar> {
       then.execute(exec_env)
     }
   }, exec_env, args; cond:any, then:block, els:block );
+  add_map!("defproc", {
+    exec_env.def_proc(name, block);
+    Ok(Literal::Void)
+  }, exec_env, args; name: str, block:block);
   add_map!("export", {
     exec_env.export(&name)?;
     Ok(Literal::Void)

@@ -43,33 +43,45 @@ mod tests {
     assert_eq!("7", *out_ref.borrow());
   }
 
-  #[test]
-  fn fizzbuzz() {
+  fn exec_file(code: &str) -> (Result<Literal, String>, String) {
     let out = Rc::new(RefCell::new("".to_owned()));
     let out_ref = out.clone();
     let out_stream = Box::new(move |msg| {
       *out.borrow_mut() = msg;
     });
 
-    let code: Vec<String> = include_str!("test/fizzbuzz.tr").split("\n").map(|c| c.to_owned()).collect();
-    let result = compile(code).and_then(|b| execute_with_out_stream(b, out_stream));
+    let code_lines: Vec<String> = code.split("\n").map(|c| c.to_owned()).collect();
+    let result = compile(code_lines).and_then(|b| execute_with_out_stream(b, out_stream));
 
-    assert_eq!(Ok(Literal::Void), result);
-    assert_eq!("12Fizz4BuzzFizz78FizzBuzz11Fizz1314FizzBuzz", *out_ref.borrow());
+    let c = out_ref.borrow().clone();
+    (result, c)
+  }
+
+  #[test]
+  fn fizzbuzz() {
+    let (r, o) = exec_file(include_str!("test/fizzbuzz.tr"));
+    assert_eq!(r, Ok(Literal::Void));
+    assert_eq!(o, "12Fizz4BuzzFizz78FizzBuzz11Fizz1314FizzBuzz");
   }
 
   #[test]
   fn defproc() {
-    let out = Rc::new(RefCell::new("".to_owned()));
-    let out_ref = out.clone();
-    let out_stream = Box::new(move |msg| {
-      *out.borrow_mut() = msg;
-    });
+    let (r, o) = exec_file(include_str!("test/defproc.tr"));
+    assert_eq!(r, Ok(Literal::Void));
+    assert_eq!(o, "6");
+  }
 
-    let code: Vec<String> = include_str!("test/defproc.tr").split("\n").map(|c| c.to_owned()).collect();
-    let result = compile(code).and_then(|b| execute_with_out_stream(b, out_stream));
+  #[test]
+  fn modules() {
+    let (r, o) = exec_file(include_str!("test/modules.tr"));
+    assert_eq!(r, Ok(Literal::Void));
+    assert_eq!(o, "6");
+  }
 
-    assert_eq!(Ok(Literal::Void), result);
-    assert_eq!("6", *out_ref.borrow());
+  #[test]
+  fn modules_err() {
+    let (r, o) = exec_file(include_str!("test/modules_err.tr"));
+    assert!(r.is_err());
+    assert_eq!(o, "");
   }
 }

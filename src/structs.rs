@@ -65,7 +65,7 @@ impl ExecuteEnv {
   }
 
   pub fn new_scope(&mut self) {
-    self.scopes.push(self.scopes.last().unwrap().clone());
+    self.scopes.push(ExecuteScope { namespace: HashMap::new() });
   }
   pub fn back_scope(&mut self) {
     if self.scopes.len() <= 1 {
@@ -102,7 +102,7 @@ impl ExecuteEnv {
         BehaviorOrVar::Behavior(be) => be(self, &exec_args),
         BehaviorOrVar::BlockBehavior(block) => {
           for (i, arg) in exec_args.iter().enumerate() {
-            self.set_var(&format!("${}", i), arg);
+            self.defset_var(&format!("${}", i), arg);
           }
 
           block.execute(self)
@@ -128,12 +128,17 @@ impl ExecuteEnv {
     }
   }
 
-  pub fn set_var(&mut self, name: &String, value: &Literal) {
+  pub fn defset_var(&mut self, name: &String, value: &Literal) {
+    self.scopes.last_mut().unwrap().namespace.insert(name.to_string(), BehaviorOrVar::Var(value.clone()));
+  }
+
+  pub fn set_var(&mut self, name: &String, value: &Literal) -> Result<(), String> {
     if let Some(scope) = self.find_scope_mut(name) {
       scope.namespace.insert(name.to_string(), BehaviorOrVar::Var(value.clone()));
+      Ok(())
     } else {
-      self.scopes.last_mut().unwrap().namespace.insert(name.to_string(), BehaviorOrVar::Var(value.clone()));
-    };
+      Err(format!("Variable {} is not defined", name))
+    }
   }
 
   pub fn def_proc(&mut self, name: &String, block: &Block) {

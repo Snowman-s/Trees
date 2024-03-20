@@ -18,6 +18,12 @@ fn predefined_procs() -> HashMap<String, BehaviorOrVar> {
         $callback
       }))
     }};
+    ($name:expr, $callback:block, $exec_env:ident, $args:ident; $($tail:ident:$type:tt),*; $list:ident:list ) => {{
+      map.insert($name.to_string(), BehaviorOrVar::Behavior(|$exec_env, $args| {
+        initialize_vars!($name, $exec_env, $args, $($tail:$type),*; $list:list);
+        $callback
+      }))
+    }};
   }
 
   macro_rules! initialize_vars {
@@ -35,6 +41,17 @@ fn predefined_procs() -> HashMap<String, BehaviorOrVar> {
         declare!($name, $env, next, $tail:$type);
       )*
     };
+    ($name: expr, $env:expr, $vec:expr, $($tail:ident:$type:tt),*; $list:ident:list) => {
+      let mut iter = $vec.into_iter();
+      $(
+        let next = match iter.next() {
+          Some(val) => val,
+          None => panic!(),
+        };
+        declare!($name, $env, next, $tail:$type);
+      )*
+      let $list: Vec<Literal> = iter.map(|c|c.clone()).collect();
+    }
   }
 
   macro_rules! declare {
@@ -88,8 +105,8 @@ fn predefined_procs() -> HashMap<String, BehaviorOrVar> {
     Ok(Literal::Void)
   }, exec_env, args; a:any);
   add_map!("seq", {
-    Ok(args.last().unwrap_or(&Literal::Void).clone())
-  }, _exec_env, args;);
+    Ok(list.last().unwrap_or(&Literal::Void).clone())
+  }, _exec_env, args;;list:list);
   add_map!("for", {
     for i in 0..times {
       exec_env.defset_var(&var, &Literal::Int(i));
@@ -116,8 +133,12 @@ fn predefined_procs() -> HashMap<String, BehaviorOrVar> {
     Ok(Literal::Void)
   }, exec_env, args; name: str, block:block);
   add_map!("exec", {
+    for (i, arg) in list.iter().enumerate() {
+      exec_env.defset_var(&format!("${}", i), arg);
+    }
+
     block.execute(exec_env)
-  }, exec_env, args; block:block);
+  }, exec_env, args; block:block; list:list);
   add_map!("export", {
     exec_env.export(&name)?;
     Ok(Literal::Void)

@@ -84,4 +84,11 @@ mod tests {
     assert!(r.is_err());
     assert_eq!(o, "");
   }
+
+  #[test]
+  fn substance() {
+    let (r, o) = exec_file(include_str!("test/substance.tr"));
+    assert_eq!(r, Ok(Literal::Void));
+    assert_eq!(o, "6");
+  }
 }

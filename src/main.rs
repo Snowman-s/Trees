@@ -1,15 +1,29 @@
+use std::{env, fs::File, io::Read, path::PathBuf};
+
 use compile::compile;
 use excutor::execute;
+use structs::Literal;
 
 mod compile;
 mod excutor;
 mod structs;
 
 fn main() {
-  let block = compile(vec![]).unwrap();
-  let result = execute(block).unwrap();
+  let args: Vec<String> = env::args().collect();
+  let code_file = &args[1];
 
-  print!("{}", result.to_string());
+  let path = env::current_dir().unwrap().join(&code_file);
+  exec_file(path).unwrap();
+}
+
+fn exec_file(file_path: PathBuf) -> Result<Literal, String> {
+  let cloned_path = file_path.clone();
+  let mut codes = File::open(&file_path).map_err(|err| format!("failed to read {:?}: {}", &file_path.to_str(), err.to_string()))?;
+  let mut buf: String = String::new();
+  codes.read_to_string(&mut buf).map_err(|err| format!("failed to read {:?}: {}", &file_path.to_str(), err.to_string()))?;
+
+  let block = compile(buf.split("\n").map(|t| t.to_owned()).collect())?;
+  execute(block, Box::new(move |name| exec_file(cloned_path.join(name).to_path_buf())))
 }
 
 #[cfg(test)]
@@ -38,7 +52,7 @@ mod tests {
       "│  3  │      │  4  │ ".to_owned(),
       "└─────┘      └─────┘ ".to_owned(),
     ])
-    .and_then(|b| execute_with_mock(b, out_stream, cmd_executor));
+    .and_then(|b| execute_with_mock(b, out_stream, cmd_executor, Box::new(|_| panic!())));
 
     assert_eq!(Ok(Literal::Void), result);
     assert_eq!("7", *out_ref.borrow());
@@ -58,7 +72,7 @@ mod tests {
     });
 
     let code_lines: Vec<String> = code.split("\n").map(|c| c.to_owned()).collect();
-    let result = compile(code_lines).and_then(|b| execute_with_mock(b, out_stream, cmd_executor));
+    let result = compile(code_lines).and_then(|b| execute_with_mock(b, out_stream, cmd_executor, Box::new(|_| panic!())));
 
     let out = out_ref.borrow().clone();
     let cmd = cmd_log_ref.borrow().clone();

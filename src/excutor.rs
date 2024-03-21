@@ -156,16 +156,28 @@ fn predefined_procs() -> HashMap<String, BehaviorOrVar> {
     exec_env.cmd(cmd, args).map(|responce|Literal::String(responce))
   }, exec_env, args; cmd:str; list:list );
 
+  add_map!("include", {
+    exec_env.include(path)
+  }, exec_env, args; path:str);
+
   map
 }
 
-pub fn execute(tree: Block) -> Result<Literal, String> {
+pub fn execute(tree: Block, includer: Box<dyn FnMut(String) -> Result<Literal, String>>) -> Result<Literal, String> {
   execute_with_mock(
     tree,
     Box::new(|msg| print!("{}", msg)),
     Box::new(|cmd, args| {
-      Command::new(cmd).args(args).output().map_err(|err| err.to_string()).and_then(|out| String::from_utf8(out.stdout).map_err(|e| e.to_string()))
+      let acutual_cmd = format!("{} {}", cmd, args.join(" "));
+      if cfg!(target_os = "windows") {
+        Command::new("cmd").args(["/C", &acutual_cmd]).output()
+      } else {
+        Command::new("sh").arg("-c").arg(acutual_cmd).output()
+      }
+      .map_err(|err| err.to_string())
+      .and_then(|out| String::from_utf8(out.stdout).map_err(|e| e.to_string()))
     }),
+    includer,
   )
 }
 
@@ -173,9 +185,10 @@ pub fn execute_with_mock(
   tree: Block,
   out_stream: Box<dyn FnMut(String)>,
   cmd_executor: Box<dyn FnMut(String, Vec<String>) -> Result<String, String>>,
+  includer: Box<dyn FnMut(String) -> Result<Literal, String>>,
 ) -> Result<Literal, String> {
   let procs = predefined_procs();
-  let mut exec_env = ExecuteEnv::new(procs, out_stream, cmd_executor);
+  let mut exec_env = ExecuteEnv::new(procs, out_stream, cmd_executor, includer);
 
   exec_env.new_scope();
   let result = tree.execute(&mut exec_env);
@@ -226,146 +239,158 @@ mod tests {
 
   #[test]
   fn simple_summing() {
-    let result = execute(*b!("+", vec![b!("3"), b!("4")]));
+    let result = execute(*b!("+", vec![b!("3"), b!("4")]), Box::new(|_| panic!()));
 
     assert_eq!(result, Ok(Literal::Int(7)))
   }
   #[test]
   fn too_much_args() {
-    let result = execute(*b!("+", vec![b!("3"), b!("4"), b!("5")]));
+    let result = execute(*b!("+", vec![b!("3"), b!("4"), b!("5")]), Box::new(|_| panic!()));
 
     assert!(result.is_err())
   }
 
   #[test]
   fn fizzbuzz() {
-    let result = execute(*b!(
-      "seq",
-      vec![
-        b!("defset", vec![b!("\"out\""), b!("\"\"")]),
-        b!(
-          "for",
-          vec![
-            b!("15"),
-            b!("\"i\""),
-            bq!(
-              "set",
-              vec![
-                b!("\"out\""),
-                b!(
-                  "strcat",
-                  vec![
-                    b!("out"),
-                    b!(
-                      "if0",
-                      vec![
-                        b!("%", vec![b!("+", vec![b!("i"), b!("1")]), b!("15")]),
-                        b!("\"FizzBuzz\""),
-                        b!(
-                          "if0",
-                          vec![
-                            b!("%", vec![b!("+", vec![b!("i"), b!("1")]), b!("3")]),
-                            b!("\"Fizz\""),
-                            b!(
-                              "if0",
-                              vec![
-                                b!("%", vec![b!("+", vec![b!("i"), b!("1")]), b!("5")]),
-                                b!("\"Buzz\""),
-                                b!("to_str", vec![b!("+", vec![b!("i"), b!("1")])])
-                              ]
-                            )
-                          ]
-                        )
-                      ]
-                    )
-                  ]
-                )
-              ]
-            ),
-          ]
-        ),
-        b!("out")
-      ]
-    ));
+    let result = execute(
+      *b!(
+        "seq",
+        vec![
+          b!("defset", vec![b!("\"out\""), b!("\"\"")]),
+          b!(
+            "for",
+            vec![
+              b!("15"),
+              b!("\"i\""),
+              bq!(
+                "set",
+                vec![
+                  b!("\"out\""),
+                  b!(
+                    "strcat",
+                    vec![
+                      b!("out"),
+                      b!(
+                        "if0",
+                        vec![
+                          b!("%", vec![b!("+", vec![b!("i"), b!("1")]), b!("15")]),
+                          b!("\"FizzBuzz\""),
+                          b!(
+                            "if0",
+                            vec![
+                              b!("%", vec![b!("+", vec![b!("i"), b!("1")]), b!("3")]),
+                              b!("\"Fizz\""),
+                              b!(
+                                "if0",
+                                vec![
+                                  b!("%", vec![b!("+", vec![b!("i"), b!("1")]), b!("5")]),
+                                  b!("\"Buzz\""),
+                                  b!("to_str", vec![b!("+", vec![b!("i"), b!("1")])])
+                                ]
+                              )
+                            ]
+                          )
+                        ]
+                      )
+                    ]
+                  )
+                ]
+              ),
+            ]
+          ),
+          b!("out")
+        ]
+      ),
+      Box::new(|_| panic!()),
+    );
 
     assert_eq!(result, Ok(Literal::String("12Fizz4BuzzFizz78FizzBuzz11Fizz1314FizzBuzz".to_string())))
   }
 
   #[test]
   fn fizzbuzz2() {
-    let result = execute(*b!(
-      "seq",
-      vec![
-        b!("defset", vec![b!("\"out\""), b!("\"\"")]),
-        b!(
-          "for",
-          vec![
-            b!("15"),
-            b!("\"i\""),
-            bq!(
-              "seq",
-              vec![
-                b!(
-                  "defset",
-                  vec![
-                    b!("\"tmp\""),
-                    b!(
-                      "strcat",
-                      vec![
-                        b!(
-                          "ifn0",
-                          vec![b!("%", vec![b!("+", vec![b!("i"), b!("1")]), b!("3")]), b!("\"\""), b!("\"Fizz\"")]
-                        ),
-                        b!(
-                          "ifn0",
-                          vec![b!("%", vec![b!("+", vec![b!("i"), b!("1")]), b!("5")]), b!("\"\""), b!("\"Buzz\"")]
-                        )
-                      ]
-                    )
-                  ]
-                ),
-                b!(
-                  "set",
-                  vec![
-                    b!("\"tmp\""),
-                    b!(
-                      "ifn0",
-                      vec![
-                        b!("=", vec![b!("tmp"), b!("\"\"")]),
-                        b!("to_str", vec![b!("+", vec![b!("i"), b!("1")])]),
-                        b!("tmp")
-                      ]
-                    )
-                  ]
-                ),
-                b!("set", vec![b!("\"out\""), b!("strcat", vec![b!("out"), b!("tmp")])]),
-              ]
-            )
-          ]
-        ),
-        b!("out")
-      ]
-    ));
+    let result = execute(
+      *b!(
+        "seq",
+        vec![
+          b!("defset", vec![b!("\"out\""), b!("\"\"")]),
+          b!(
+            "for",
+            vec![
+              b!("15"),
+              b!("\"i\""),
+              bq!(
+                "seq",
+                vec![
+                  b!(
+                    "defset",
+                    vec![
+                      b!("\"tmp\""),
+                      b!(
+                        "strcat",
+                        vec![
+                          b!(
+                            "ifn0",
+                            vec![b!("%", vec![b!("+", vec![b!("i"), b!("1")]), b!("3")]), b!("\"\""), b!("\"Fizz\"")]
+                          ),
+                          b!(
+                            "ifn0",
+                            vec![b!("%", vec![b!("+", vec![b!("i"), b!("1")]), b!("5")]), b!("\"\""), b!("\"Buzz\"")]
+                          )
+                        ]
+                      )
+                    ]
+                  ),
+                  b!(
+                    "set",
+                    vec![
+                      b!("\"tmp\""),
+                      b!(
+                        "ifn0",
+                        vec![
+                          b!("=", vec![b!("tmp"), b!("\"\"")]),
+                          b!("to_str", vec![b!("+", vec![b!("i"), b!("1")])]),
+                          b!("tmp")
+                        ]
+                      )
+                    ]
+                  ),
+                  b!("set", vec![b!("\"out\""), b!("strcat", vec![b!("out"), b!("tmp")])]),
+                ]
+              )
+            ]
+          ),
+          b!("out")
+        ]
+      ),
+      Box::new(|_| panic!()),
+    );
 
     assert_eq!(result, Ok(Literal::String("12Fizz4BuzzFizz78FizzBuzz11Fizz1314FizzBuzz".to_string())))
   }
 
   #[test]
   fn cannot_refer_inside() {
-    let result = execute(*b!("seq", vec![b!("seq", vec![b!("defset", vec![b!("\"out\""), b!("3")])]), b!("out")]));
+    let result = execute(
+      *b!("seq", vec![b!("seq", vec![b!("defset", vec![b!("\"out\""), b!("3")])]), b!("out")]),
+      Box::new(|_| panic!()),
+    );
 
     assert!(result.is_err());
   }
 
   #[test]
   fn simple_export() {
-    let result = execute(*b!(
-      "seq",
-      vec![
-        b!("seq", vec![b!("defset", vec![b!("\"out\""), b!("3")]), b!("export", vec![b!("\"out\"")])]),
-        b!("out")
-      ]
-    ));
+    let result = execute(
+      *b!(
+        "seq",
+        vec![
+          b!("seq", vec![b!("defset", vec![b!("\"out\""), b!("3")]), b!("export", vec![b!("\"out\"")])]),
+          b!("out")
+        ]
+      ),
+      Box::new(|_| panic!()),
+    );
 
     assert_eq!(result, Ok(Literal::Int(3)))
   }

@@ -52,7 +52,7 @@ mod tests {
       "│  3  │      │  4  │ ".to_owned(),
       "└─────┘      └─────┘ ".to_owned(),
     ])
-    .and_then(|b| execute_with_mock(b, out_stream, cmd_executor, Box::new(|_| panic!())));
+    .and_then(|b| execute_with_mock(b, Box::new(|| panic!()), out_stream, cmd_executor, Box::new(|_| panic!())));
 
     assert_eq!(Ok(Literal::Void), result);
     assert_eq!("7", *out_ref.borrow());
@@ -72,7 +72,7 @@ mod tests {
     });
 
     let code_lines: Vec<String> = code.split("\n").map(|c| c.to_owned()).collect();
-    let result = compile(code_lines).and_then(|b| execute_with_mock(b, out_stream, cmd_executor, Box::new(|_| panic!())));
+    let result = compile(code_lines).and_then(|b| execute_with_mock(b, Box::new(|| panic!()), out_stream, cmd_executor, Box::new(|_| panic!())));
 
     let out = out_ref.borrow().clone();
     let cmd = cmd_log_ref.borrow().clone();

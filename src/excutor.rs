@@ -104,6 +104,8 @@ fn predefined_procs() -> HashMap<String, BehaviorOrVar> {
     exec_env.print(a.to_string());
     Ok(Literal::Void)
   }, exec_env, args; a:any);
+  add_map!("read line", { Ok(Literal::String(exec_env.read_line())) }, exec_env, args;);
+
   add_map!("seq", {
     Ok(list.last().unwrap_or(&Literal::Void).clone())
   }, _exec_env, args;;list:list);
@@ -166,6 +168,11 @@ fn predefined_procs() -> HashMap<String, BehaviorOrVar> {
 pub fn execute(tree: Block, includer: Box<dyn FnMut(String) -> Result<Literal, String>>) -> Result<Literal, String> {
   execute_with_mock(
     tree,
+    Box::new(|| {
+      let mut str = String::new();
+      std::io::stdin().read_line(&mut str);
+      str
+    }),
     Box::new(|msg| print!("{}", msg)),
     Box::new(|cmd, args| {
       let acutual_cmd = format!("{} {}", cmd, args.join(" "));
@@ -183,12 +190,13 @@ pub fn execute(tree: Block, includer: Box<dyn FnMut(String) -> Result<Literal, S
 
 pub fn execute_with_mock(
   tree: Block,
+  input_stream: Box<dyn FnMut() -> String>,
   out_stream: Box<dyn FnMut(String)>,
   cmd_executor: Box<dyn FnMut(String, Vec<String>) -> Result<String, String>>,
   includer: Box<dyn FnMut(String) -> Result<Literal, String>>,
 ) -> Result<Literal, String> {
   let procs = predefined_procs();
-  let mut exec_env = ExecuteEnv::new(procs, out_stream, cmd_executor, includer);
+  let mut exec_env = ExecuteEnv::new(procs, input_stream, out_stream, cmd_executor, includer);
 
   exec_env.new_scope();
   let result = tree.execute(&mut exec_env);

@@ -43,6 +43,7 @@ struct ExecuteScope {
 
 pub struct ExecuteEnv {
   scopes: Vec<ExecuteScope>,
+  input_stream: Box<dyn FnMut() -> String>,
   out_stream: Box<dyn FnMut(String)>,
   cmd_executor: Box<dyn FnMut(String, Vec<String>) -> Result<String, String>>,
   includer: Box<dyn FnMut(String) -> Result<Literal, String>>,
@@ -61,12 +62,14 @@ fn to_int(str: &String) -> Option<u64> {
 impl ExecuteEnv {
   pub fn new(
     namespace: HashMap<String, BehaviorOrVar>,
+    input_stream: Box<dyn FnMut() -> String>,
     out_stream: Box<dyn FnMut(String)>,
     cmd_executor: Box<dyn FnMut(String, Vec<String>) -> Result<String, String>>,
     includer: Box<dyn FnMut(String) -> Result<Literal, String>>,
   ) -> ExecuteEnv {
     ExecuteEnv {
       scopes: vec![ExecuteScope { namespace }],
+      input_stream,
       out_stream,
       cmd_executor,
       includer,
@@ -171,6 +174,10 @@ impl ExecuteEnv {
     } else {
       Err(format!("Variable {} is not defined", name))
     }
+  }
+
+  pub fn read_line(&mut self) -> String {
+    (self.input_stream)()
   }
 
   pub fn print(&mut self, msg: String) {

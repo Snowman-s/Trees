@@ -44,6 +44,7 @@ struct ExecuteScope {
 pub struct ExecuteEnv {
   scopes: Vec<ExecuteScope>,
   out_stream: Box<dyn FnMut(String)>,
+  cmd_executor: Box<dyn FnMut(String, Vec<String>) -> Result<String, String>>,
 }
 
 fn to_int(str: &String) -> Option<u64> {
@@ -57,10 +58,15 @@ fn to_int(str: &String) -> Option<u64> {
 }
 
 impl ExecuteEnv {
-  pub fn new(namespace: HashMap<String, BehaviorOrVar>, out_stream: Box<dyn FnMut(String)>) -> ExecuteEnv {
+  pub fn new(
+    namespace: HashMap<String, BehaviorOrVar>,
+    out_stream: Box<dyn FnMut(String)>,
+    cmd_executor: Box<dyn FnMut(String, Vec<String>) -> Result<String, String>>,
+  ) -> ExecuteEnv {
     ExecuteEnv {
       scopes: vec![ExecuteScope { namespace }],
       out_stream,
+      cmd_executor,
     }
   }
 
@@ -166,6 +172,10 @@ impl ExecuteEnv {
 
   pub fn print(&mut self, msg: String) {
     (self.out_stream)(msg);
+  }
+
+  pub fn cmd(&mut self, cmd: String, args: Vec<String>) -> Result<String, String> {
+    (self.cmd_executor)(cmd, args)
   }
 }
 

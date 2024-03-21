@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, process::Command};
 
 use crate::structs::{BehaviorOrVar, Block, ExecuteEnv, Literal};
 
@@ -144,16 +144,38 @@ fn predefined_procs() -> HashMap<String, BehaviorOrVar> {
     Ok(Literal::Void)
   }, exec_env, args; name:str );
 
+  add_map!("cmd", {
+    let mut args = vec![];
+    for l in list {
+      if let Literal::String(s) = l {
+        args.push( s.to_owned()); 
+      } else {
+        return Err(format!("Procesure {}: Executed result of arg {} must be block.", "cmd", l.to_string()));
+      }
+    }
+    exec_env.cmd(cmd, args).map(|responce|Literal::String(responce))
+  }, exec_env, args; cmd:str; list:list );
+
   map
 }
 
 pub fn execute(tree: Block) -> Result<Literal, String> {
-  execute_with_out_stream(tree, Box::new(|msg| print!("{}", msg)))
+  execute_with_mock(
+    tree,
+    Box::new(|msg| print!("{}", msg)),
+    Box::new(|cmd, args| {
+      Command::new(cmd).args(args).output().map_err(|err| err.to_string()).and_then(|out| String::from_utf8(out.stdout).map_err(|e| e.to_string()))
+    }),
+  )
 }
 
-pub fn execute_with_out_stream(tree: Block, out_stream: Box<dyn FnMut(String)>) -> Result<Literal, String> {
+pub fn execute_with_mock(
+  tree: Block,
+  out_stream: Box<dyn FnMut(String)>,
+  cmd_executor: Box<dyn FnMut(String, Vec<String>) -> Result<String, String>>,
+) -> Result<Literal, String> {
   let procs = predefined_procs();
-  let mut exec_env = ExecuteEnv::new(procs, out_stream);
+  let mut exec_env = ExecuteEnv::new(procs, out_stream, cmd_executor);
 
   exec_env.new_scope();
   let result = tree.execute(&mut exec_env);

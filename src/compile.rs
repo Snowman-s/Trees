@@ -10,12 +10,20 @@ struct CompilingBlock {
   width: usize,
   height: usize,
   block_plug: Option<BlockPlug>,
-  arg_plugs: Vec<Plug>,
-  args: Vec<usize>,
+  arg_plugs: Vec<ArgPlug>,
+  args: Vec<(bool, usize)>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct Plug {
+struct ArgPlug {
+  x: usize,
+  y: usize,
+  expand: bool,
+  ori: Orientation,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct Edge {
   x: usize,
   y: usize,
   ori: Orientation,
@@ -40,7 +48,7 @@ impl CompilingBlock {
   fn to_block(&self, blocks: &Vec<CompilingBlock>) -> Block {
     Block {
       proc_name: self.proc_name.clone(),
-      args: self.args.clone().into_iter().map(|t| Box::new(blocks[t].to_block(blocks))).collect(),
+      args: self.args.clone().into_iter().map(|(expand, block_index)| (expand, Box::new(blocks[block_index].to_block(blocks)))).collect(),
       quote: if let Some(p) = &self.block_plug { p.quote } else { false },
     }
   }
@@ -79,11 +87,19 @@ fn find_a_block(code: &Vec<Vec<String>>, x: usize, y: usize) -> Option<Compiling
   };
 
   let mut height1 = 1;
-  while char!(width1, height1) == "│" || char!(width1, height1) == "├" {
+  while char!(width1, height1) == "│" || char!(width1, height1) == "├" || char!(width1, height1) == "@" {
     if char!(width1, height1) == "├" {
-      arg_plugs.push(Plug {
+      arg_plugs.push(ArgPlug {
         x: x + width1,
         y: y + height1,
+        expand: false,
+        ori: Orientation::Right,
+      });
+    } else if char!(width1, height1) == "@" {
+      arg_plugs.push(ArgPlug {
+        x: x + width1,
+        y: y + height1,
+        expand: true,
         ori: Orientation::Right,
       });
     }
@@ -94,11 +110,19 @@ fn find_a_block(code: &Vec<Vec<String>>, x: usize, y: usize) -> Option<Compiling
   };
 
   let mut under_width1 = 1;
-  while char!(under_width1, height1) == "─" || char!(under_width1, height1) == "┬" {
+  while char!(under_width1, height1) == "─" || char!(under_width1, height1) == "┬" || char!(under_width1, height1) == "@" {
     if char!(under_width1, height1) == "┬" {
-      arg_plugs.push(Plug {
+      arg_plugs.push(ArgPlug {
         x: x + under_width1,
         y: y + height1,
+        expand: false,
+        ori: Orientation::Down,
+      });
+    } else if char!(under_width1, height1) == "@" {
+      arg_plugs.push(ArgPlug {
+        x: x + under_width1,
+        y: y + height1,
+        expand: true,
         ori: Orientation::Down,
       });
     }
@@ -109,11 +133,19 @@ fn find_a_block(code: &Vec<Vec<String>>, x: usize, y: usize) -> Option<Compiling
   };
 
   let mut under_height1 = 1;
-  while char!(0, under_height1) == "│" || char!(0, under_height1) == "┤" {
+  while char!(0, under_height1) == "│" || char!(0, under_height1) == "┤" || char!(0, under_height1) == "@" {
     if char!(0, under_height1) == "┤" {
-      arg_plugs.push(Plug {
+      arg_plugs.push(ArgPlug {
         x,
         y: y + under_height1,
+        expand: false,
+        ori: Orientation::Left,
+      });
+    } else if char!(0, under_height1) == "@" {
+      arg_plugs.push(ArgPlug {
+        x,
+        y: y + under_height1,
+        expand: true,
         ori: Orientation::Left,
       });
     }
@@ -168,43 +200,43 @@ fn find_blocks(code_splited: &Vec<Vec<String>>) -> Vec<CompilingBlock> {
   blocks
 }
 
-fn find_next_edge(code: &Vec<Vec<String>>, x: &usize, y: &usize, ori: &Orientation) -> Result<Plug, Plug> {
-  let update_and_check = |new_x: usize, new_y: usize, up: &str, left: &str, right: &str, down: &str| -> Result<Plug, Plug> {
+fn find_next_edge(code: &Vec<Vec<String>>, x: &usize, y: &usize, ori: &Orientation) -> Result<Edge, Edge> {
+  let update_and_check = |new_x: usize, new_y: usize, up: &str, left: &str, right: &str, down: &str| -> Result<Edge, Edge> {
     let t = code
       .get(new_y)
       .and_then(|l| l.get(new_x))
-      .ok_or(Plug {
+      .ok_or(Edge {
         x: new_x,
         y: new_y,
         ori: ori.clone(),
       })?
       .as_str();
     if t == up {
-      Ok(Plug {
+      Ok(Edge {
         x: new_x,
         y: new_y,
         ori: Orientation::Up,
       })
     } else if t == left {
-      Ok(Plug {
+      Ok(Edge {
         x: new_x,
         y: new_y,
         ori: Orientation::Left,
       })
     } else if t == right {
-      Ok(Plug {
+      Ok(Edge {
         x: new_x,
         y: new_y,
         ori: Orientation::Right,
       })
     } else if t == down {
-      Ok(Plug {
+      Ok(Edge {
         x: new_x,
         y: new_y,
         ori: Orientation::Down,
       })
     } else {
-      Err(Plug {
+      Err(Edge {
         x: new_x,
         y: new_y,
         ori: ori.clone(),
@@ -233,7 +265,7 @@ fn connect_blocks(code: &Vec<Vec<String>>, blocks: &Vec<CompilingBlock>) -> Resu
   let head = head_candinates[0];
 
   for block in blocks_clone.iter_mut() {
-    for Plug { x, y, ori } in block.arg_plugs.iter() {
+    for ArgPlug { x, y, expand, ori } in block.arg_plugs.iter() {
       let mut mut_x = *x;
       let mut mut_y = *y;
       let mut mut_ori = ori.clone();
@@ -265,7 +297,7 @@ fn connect_blocks(code: &Vec<Vec<String>>, blocks: &Vec<CompilingBlock>) -> Resu
         })
         .ok_or(format!("No block-plug found at ({}, {})", mut_x, mut_y))?;
 
-      block.args.push(index);
+      block.args.push((*expand, index));
     }
   }
 
@@ -287,7 +319,7 @@ pub fn compile(code: Vec<String>) -> Result<Block, String> {
 #[cfg(test)]
 mod tests {
   use crate::{
-    compile::{find_blocks, BlockPlug, CompilingBlock, Orientation, Plug},
+    compile::{find_blocks, ArgPlug, BlockPlug, CompilingBlock, Orientation},
     structs::Block,
   };
 
@@ -362,9 +394,10 @@ mod tests {
           width: 9,
           height: 3,
           block_plug: None,
-          arg_plugs: vec![Plug {
+          arg_plugs: vec![ArgPlug {
             x: 8,
             y: 3,
+            expand: false,
             ori: Orientation::Down
           }],
           args: vec![]
@@ -399,11 +432,14 @@ mod tests {
     assert_eq!(
       Ok(Block {
         proc_name: "abc".to_owned(),
-        args: vec![Box::new(Block {
-          proc_name: "def".to_owned(),
-          args: vec![],
-          quote: false
-        })],
+        args: vec![(
+          false,
+          Box::new(Block {
+            proc_name: "def".to_owned(),
+            args: vec![],
+            quote: false
+          })
+        )],
         quote: false
       }),
       block

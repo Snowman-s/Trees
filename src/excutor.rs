@@ -30,7 +30,7 @@ fn predefined_procs() -> HashMap<String, BehaviorOrVar> {
     ($name: expr, $env:expr, $vec:expr,) => {};
     ($name: expr, $env:expr, $vec:expr, $($tail:ident:$type:tt),+) => {
       if $vec.len() != count_idents!($($tail)*) {
-        return Err(format!("Procesure {}: Length of args must be {}.", $name, count_idents!($($tail)*)));
+        return Err(format!("Procesure {}: Length of args must be {}. (Got {})", $name, count_idents!($($tail)*), $vec.len()));
       }
       let mut iter = $vec.into_iter();
       $(
@@ -76,6 +76,12 @@ fn predefined_procs() -> HashMap<String, BehaviorOrVar> {
       };
       let $tail = $tail.clone();
     };
+    ($name: expr, $env:expr, $block:expr, $tail:ident:list) => {
+      let Literal::List($tail) = $block else {
+        return Err(format!("Procesure {}: Executed result of arg {} must be list.", $name, $block.to_string()));
+      };
+      let $tail = $tail.clone();
+    };
   }
 
   macro_rules! count_idents {
@@ -91,6 +97,9 @@ fn predefined_procs() -> HashMap<String, BehaviorOrVar> {
   add_map!("=", {Ok(Literal::Int(if a == b { 1 } else { 0 }))}; a:any, b:any);
   add_map!("strcat", {Ok(Literal::String(format!("{}{}", a, b)))}; a:str, b:str);
   add_map!("to_str", {Ok(Literal::String(a.to_string()))}; a:any);
+  add_map!("str to int", {
+    Ok(Literal::Int(i64::from_str_radix(&a, 10).map_err(|e|e.to_string())?))
+  }; a:str);
   add_map!("get", {exec_env.get_var(&name)}, exec_env, _args; name:str);
   add_map!("defset", {
     exec_env.defset_var(&name, &from);
@@ -105,6 +114,20 @@ fn predefined_procs() -> HashMap<String, BehaviorOrVar> {
     Ok(Literal::Void)
   }, exec_env, args; a:any);
   add_map!("read line", { Ok(Literal::String(exec_env.read_line())) }, exec_env, args;);
+
+  add_map!("split str", {
+    Ok(Literal::List(origin.split(&spliter).map(|str|Literal::String(str.to_owned())).collect()))
+  }; origin: str, spliter: str);
+  add_map!("listing", {
+    Ok(Literal::List(list))
+  }, _exec_env, args;;list:list);
+  add_map!("[]", {
+    let index_usize:usize = usize::try_from( index).map_err(|e|e.to_string())?;
+    list.get(index_usize).map(|lit|lit.clone()).ok_or("Index out of range".to_string())
+  };list:list, index:int);
+  add_map!("len", {
+    Ok(Literal::Int(i64::try_from(list.len()).map_err(|err|err.to_string())?))
+  };list:list);
 
   add_map!("seq", {
     Ok(list.last().unwrap_or(&Literal::Void).clone())
@@ -135,6 +158,7 @@ fn predefined_procs() -> HashMap<String, BehaviorOrVar> {
     Ok(Literal::Void)
   }, exec_env, args; name: str, block:block);
   add_map!("exec", {
+    exec_env.defset_var("$args", &Literal::List(list.clone()));
     for (i, arg) in list.iter().enumerate() {
       exec_env.defset_var(&format!("${}", i), arg);
     }
@@ -222,7 +246,7 @@ mod tests {
     ($name:expr, $args:expr) => {
       Box::new(Block {
         proc_name: $name.to_owned(),
-        args: $args,
+        args: $args.into_iter().map(|a| (false, a)).collect(),
         quote: false,
       })
     };
@@ -239,7 +263,7 @@ mod tests {
     ($name:expr, $args:expr) => {
       Box::new(Block {
         proc_name: $name.to_owned(),
-        args: $args,
+        args: $args.into_iter().map(|a| (false, a)).collect(),
         quote: true,
       })
     };

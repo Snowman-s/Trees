@@ -3,9 +3,10 @@ use std::{collections::HashMap, sync::OnceLock};
 
 #[derive(PartialEq, Eq, Debug, Clone)]
 pub enum Literal {
-  Int(u64),
+  Int(i64),
   String(String),
   Block(Block),
+  List(Vec<Literal>),
   Void,
 }
 
@@ -15,6 +16,9 @@ impl ToString for Literal {
       Literal::Int(i) => i.to_string(),
       Literal::String(s) => s.clone(),
       Literal::Block(b) => format!("Block {}", b.proc_name),
+      Literal::List(list) => {
+        format!("[{}]", list.iter().map(|l| l.to_string()).collect::<Vec<String>>().join(", "))
+      }
       Literal::Void => "<Void>".to_string(),
     }
   }
@@ -23,7 +27,7 @@ impl ToString for Literal {
 #[derive(PartialEq, Eq, Debug, Clone)]
 pub struct Block {
   pub proc_name: String,
-  pub args: Vec<Box<Block>>,
+  pub args: Vec<(bool, Box<Block>)>,
   pub quote: bool,
 }
 
@@ -49,11 +53,11 @@ pub struct ExecuteEnv {
   includer: Box<dyn FnMut(String) -> Result<Literal, String>>,
 }
 
-fn to_int(str: &String) -> Option<u64> {
+fn to_int(str: &String) -> Option<i64> {
   static REGEX: OnceLock<regex::Regex> = OnceLock::<Regex>::new();
   let regex = REGEX.get_or_init(|| Regex::new(r"^[0-9]+$").unwrap());
   if regex.is_match(str) {
-    u64::from_str_radix(str, 10).ok()
+    i64::from_str_radix(str, 10).ok()
   } else {
     None
   }
@@ -100,11 +104,19 @@ impl ExecuteEnv {
     self.find_scope_mut(name).and_then(|c| c.namespace.get_mut(name))
   }
 
-  pub fn execute(&mut self, name: &String, args: &Vec<Box<Block>>) -> Result<Literal, String> {
+  pub fn execute(&mut self, name: &String, args: &Vec<(bool, Box<Block>)>) -> Result<Literal, String> {
     self.new_scope();
     let mut exec_args = vec![];
-    for arg in args {
-      exec_args.push(arg.execute(self)?);
+    for (expand, arg) in args {
+      let result = arg.execute(self)?;
+      if *expand {
+        let Literal::List(res_list) = result else {
+          return Err(format!("\"@\" needs the arg is a list literal. (Got {})", result.to_string()));
+        };
+        exec_args.extend(res_list);
+      } else {
+        exec_args.push(result);
+      }
     }
     self.back_scope();
 
@@ -113,6 +125,7 @@ impl ExecuteEnv {
       match behavior_or_var {
         BehaviorOrVar::Behavior(be) => be(self, &exec_args),
         BehaviorOrVar::BlockBehavior(block) => {
+          self.defset_var("$args", &Literal::List(exec_args.clone()));
           for (i, arg) in exec_args.iter().enumerate() {
             self.defset_var(&format!("${}", i), arg);
           }
@@ -140,7 +153,7 @@ impl ExecuteEnv {
     }
   }
 
-  pub fn defset_var(&mut self, name: &String, value: &Literal) {
+  pub fn defset_var(&mut self, name: &str, value: &Literal) {
     self.scopes.last_mut().unwrap().namespace.insert(name.to_string(), BehaviorOrVar::Var(value.clone()));
   }
 

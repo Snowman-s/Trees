@@ -121,4 +121,11 @@ mod tests {
     assert_eq!(o, "");
     assert_eq!(cmd, vec![("echo".to_string(), vec!["out".to_string()])]);
   }
+
+  #[test]
+  fn lists() {
+    let (r, o, _) = exec_file(include_str!("test/lists.tr"));
+    assert_eq!(r, Ok(Literal::Int(7)));
+    assert_eq!(o, "");
+  }
 }

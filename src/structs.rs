@@ -1,5 +1,5 @@
 use regex::Regex;
-use std::{collections::HashMap, sync::OnceLock};
+use std::{collections::HashMap, fmt::format, path::Display, sync::OnceLock};
 
 #[derive(PartialEq, Eq, Debug, Clone)]
 pub enum Literal {
@@ -17,7 +17,17 @@ impl ToString for Literal {
       Literal::String(s) => s.clone(),
       Literal::Block(b) => format!("Block {}", b.proc_name),
       Literal::List(list) => {
-        format!("[{}]", list.iter().map(|l| l.to_string()).collect::<Vec<String>>().join(", "))
+        format!(
+          "[{}]",
+          list
+            .iter()
+            .map(|l| match l {
+              Literal::String(s) => format!("{s:?}"),
+              _ => l.to_string(),
+            })
+            .collect::<Vec<String>>()
+            .join(", ")
+        )
       }
       Literal::Void => "<Void>".to_string(),
     }

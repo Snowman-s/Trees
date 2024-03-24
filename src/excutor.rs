@@ -194,8 +194,8 @@ pub fn execute(tree: Block, includer: Box<dyn FnMut(String) -> Result<Literal, S
     tree,
     Box::new(|| {
       let mut str = String::new();
-      std::io::stdin().read_line(&mut str);
-      str
+      std::io::stdin().read_line(&mut str).unwrap();
+      str.trim().to_string()
     }),
     Box::new(|msg| print!("{}", msg)),
     Box::new(|cmd, args| {

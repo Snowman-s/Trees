@@ -1,5 +1,6 @@
 # Trees
-A programming language written in an "easy to understand" way
+
+Trees は、一切の曖昧性がなく非常に読みやすいプログラミング言語です！
 
 ```
         ┌─────┐
@@ -12,3 +13,5 @@ A programming language written in an "easy to understand" way
 │  3  │      │  4  │
 └─────┘      └─────┘ 
 ```
+
+チュートリアルは https://github.com/Snowman-s/trees/wiki を参照ください。

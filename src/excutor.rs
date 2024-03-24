@@ -96,7 +96,7 @@ fn predefined_procs() -> HashMap<String, BehaviorOrVar> {
   add_map!("%", {Ok(Literal::Int(a % b))}; a:int, b:int);
   add_map!("=", {Ok(Literal::Int(if a == b { 1 } else { 0 }))}; a:any, b:any);
   add_map!("strcat", {Ok(Literal::String(format!("{}{}", a, b)))}; a:str, b:str);
-  add_map!("to_str", {Ok(Literal::String(a.to_string()))}; a:any);
+  add_map!("to str", {Ok(Literal::String(a.to_string()))}; a:any);
   add_map!("str to int", {
     Ok(Literal::Int(i64::from_str_radix(&a, 10).map_err(|e|e.to_string())?))
   }; a:str);
@@ -317,7 +317,7 @@ mod tests {
                                 vec![
                                   b!("%", vec![b!("+", vec![b!("i"), b!("1")]), b!("5")]),
                                   b!("\"Buzz\""),
-                                  b!("to_str", vec![b!("+", vec![b!("i"), b!("1")])])
+                                  b!("to str", vec![b!("+", vec![b!("i"), b!("1")])])
                                 ]
                               )
                             ]
@@ -381,7 +381,7 @@ mod tests {
                         "ifn0",
                         vec![
                           b!("=", vec![b!("tmp"), b!("\"\"")]),
-                          b!("to_str", vec![b!("+", vec![b!("i"), b!("1")])]),
+                          b!("to str", vec![b!("+", vec![b!("i"), b!("1")])]),
                           b!("tmp")
                         ]
                       )

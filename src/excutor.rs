@@ -176,7 +176,7 @@ fn predefined_procs() -> HashMap<String, BehaviorOrVar> {
       if let Literal::String(s) = l {
         args.push( s.to_owned()); 
       } else {
-        return Err(format!("Procesure {}: Executed result of arg {} must be block.", "cmd", l.to_string()));
+        return Err(format!("Procesure {}: Executed result of arg {} must be str.", "cmd", l.to_string()));
       }
     }
     exec_env.cmd(cmd, args).map(|responce|Literal::String(responce))

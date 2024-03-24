@@ -25,6 +25,8 @@ Trees は、ブロックプログラミング言語で、以下の特徴を備�
 ```terminal
 $ git clone https://github.com/Snowman-s/Trees.git
 
+$ cd Trees
+
 $ cargo build --release
 ```
 

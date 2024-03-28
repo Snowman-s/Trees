@@ -1,11 +1,11 @@
 use std::{env, fs::File, io::Read, path::PathBuf};
 
 use compile::compile;
-use excutor::execute;
+use executor::execute;
 use structs::Literal;
 
 mod compile;
-mod excutor;
+mod executor;
 mod structs;
 
 fn main() {
@@ -30,7 +30,7 @@ fn exec_file(file_path: PathBuf) -> Result<Literal, String> {
 mod tests {
   use std::{cell::RefCell, rc::Rc};
 
-  use crate::{compile, excutor::execute_with_mock, structs::Literal};
+  use crate::{compile, executor::execute_with_mock, structs::Literal};
 
   #[test]
   fn a_plus_b() {

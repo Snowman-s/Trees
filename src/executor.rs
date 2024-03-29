@@ -113,6 +113,10 @@ fn predefined_procs() -> HashMap<String, BehaviorOrVar> {
     exec_env.print(a.to_string());
     Ok(Literal::Void)
   }, exec_env, args; a:any);
+  add_map!("println", {
+    exec_env.print(a.to_string() + "\n");
+    Ok(Literal::Void)
+  }, exec_env, args; a:any);
   add_map!("read line", { Ok(Literal::String(exec_env.read_line())) }, exec_env, args;);
 
   add_map!("split str", {

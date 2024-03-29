@@ -80,6 +80,13 @@ mod tests {
   }
 
   #[test]
+  fn println() {
+    let (r, o, _) = exec_file(include_str!("test/println.tr"));
+    assert_eq!(r, Ok(Literal::Void));
+    assert_eq!(o, "7\n");
+  }
+
+  #[test]
   fn fizzbuzz() {
     let (r, o, _) = exec_file(include_str!("test/fizzbuzz.tr"));
     assert_eq!(r, Ok(Literal::Void));

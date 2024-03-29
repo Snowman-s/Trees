@@ -1,8 +1,8 @@
-use std::{env, fs::File, io::Read, path::PathBuf};
+use std::{env, fs::File, io::Read, path::PathBuf, rc::Rc};
 
 use compile::compile;
 use executor::execute;
-use structs::Literal;
+use structs::Block;
 
 mod compile;
 mod executor;
@@ -12,18 +12,21 @@ fn main() {
   let args: Vec<String> = env::args().collect();
   let code_file = &args[1];
 
-  let path = env::current_dir().unwrap().join(&code_file);
-  exec_file(path).unwrap();
+  let path = Rc::new(env::current_dir().unwrap().join(&code_file));
+  let block = compile_file(path.to_path_buf()).unwrap();
+  execute(
+    block,
+    Box::new(move |name| compile_file(name.iter().fold(path.parent().unwrap().to_path_buf(), |a, b| a.join(b)))),
+  )
+  .unwrap();
 }
 
-fn exec_file(file_path: PathBuf) -> Result<Literal, String> {
-  let cloned_path = file_path.clone();
+fn compile_file(file_path: PathBuf) -> Result<Block, String> {
   let mut codes = File::open(&file_path).map_err(|err| format!("failed to read {:?}: {}", &file_path.to_str(), err.to_string()))?;
   let mut buf: String = String::new();
   codes.read_to_string(&mut buf).map_err(|err| format!("failed to read {:?}: {}", &file_path.to_str(), err.to_string()))?;
 
-  let block = compile(buf.split("\n").map(|t| t.to_owned()).collect())?;
-  execute(block, Box::new(move |name| exec_file(cloned_path.join(name).to_path_buf())))
+  compile(buf.split("\n").map(|t| t.to_owned()).collect())
 }
 
 #[cfg(test)]

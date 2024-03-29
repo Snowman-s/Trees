@@ -216,7 +216,7 @@ fn predefined_procs() -> HashMap<String, BehaviorOrVar> {
   map
 }
 
-pub fn execute(tree: Block, includer: Box<dyn FnMut(String) -> Result<Literal, String>>) -> Result<Literal, String> {
+pub fn execute(tree: Block, includer: Box<dyn FnMut(&Vec<String>) -> Result<Block, String>>) -> Result<Literal, String> {
   execute_with_mock(
     tree,
     Box::new(|| {
@@ -244,7 +244,7 @@ pub fn execute_with_mock(
   input_stream: Box<dyn FnMut() -> String>,
   out_stream: Box<dyn FnMut(String)>,
   cmd_executor: Box<dyn FnMut(String, Vec<String>) -> Result<String, String>>,
-  includer: Box<dyn FnMut(String) -> Result<Literal, String>>,
+  includer: Box<dyn FnMut(&Vec<String>) -> Result<Block, String>>,
 ) -> Result<Literal, String> {
   let procs = predefined_procs();
   let mut exec_env = ExecuteEnv::new(procs, input_stream, out_stream, cmd_executor, includer);

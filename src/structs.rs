@@ -1,5 +1,5 @@
 use regex::Regex;
-use std::{collections::HashMap, fmt::format, path::Display, sync::OnceLock};
+use std::{collections::HashMap, sync::OnceLock};
 
 #[derive(PartialEq, Eq, Debug, Clone)]
 pub enum Literal {
@@ -57,10 +57,11 @@ struct ExecuteScope {
 
 pub struct ExecuteEnv {
   scopes: Vec<ExecuteScope>,
+  paths: Vec<String>,
   input_stream: Box<dyn FnMut() -> String>,
   out_stream: Box<dyn FnMut(String)>,
   cmd_executor: Box<dyn FnMut(String, Vec<String>) -> Result<String, String>>,
-  includer: Box<dyn FnMut(String) -> Result<Literal, String>>,
+  includer: Box<dyn FnMut(&Vec<String>) -> Result<Block, String>>,
 }
 
 fn to_int(str: &String) -> Option<i64> {
@@ -79,10 +80,11 @@ impl ExecuteEnv {
     input_stream: Box<dyn FnMut() -> String>,
     out_stream: Box<dyn FnMut(String)>,
     cmd_executor: Box<dyn FnMut(String, Vec<String>) -> Result<String, String>>,
-    includer: Box<dyn FnMut(String) -> Result<Literal, String>>,
+    includer: Box<dyn FnMut(&Vec<String>) -> Result<Block, String>>,
   ) -> ExecuteEnv {
     ExecuteEnv {
       scopes: vec![ExecuteScope { namespace }],
+      paths: vec![],
       input_stream,
       out_stream,
       cmd_executor,
@@ -211,8 +213,26 @@ impl ExecuteEnv {
     (self.cmd_executor)(cmd, args)
   }
 
-  pub fn include(&mut self, path: String) -> Result<Literal, String> {
-    (self.includer)(path)
+  pub fn include(&mut self, path_str: String) -> Result<Literal, String> {
+    // 祖先抽出
+    let parent = if let Some(index) = path_str.find('/') {
+      let truncated = &path_str[..index];
+      truncated.to_string()
+    } else {
+      "".to_owned()
+    };
+
+    // コンパイル
+    let mut paths = self.paths.clone();
+    paths.push(path_str);
+    let block = (self.includer)(&paths)?;
+
+    // 実行
+    self.paths.push(parent);
+    let result = block.execute(self)?;
+    self.paths.pop();
+
+    Ok(result)
   }
 }
 

@@ -6,7 +6,12 @@ fn predefined_procs() -> HashMap<String, BehaviorOrVar> {
   let mut map: HashMap<String, BehaviorOrVar> = HashMap::new();
 
   macro_rules! add_map {
-    ($name:expr, $callback:block; $($tail:ident:$type:tt),* ) => {{
+    ($name:expr, $callback:block; ) => {{
+      map.insert($name.to_string(), BehaviorOrVar::Behavior(|_exec_env, _args| {
+        $callback
+      }))
+    }};
+    ($name:expr, $callback:block; $($tail:ident:$type:tt),+ ) => {{
       map.insert($name.to_string(), BehaviorOrVar::Behavior(|_exec_env, args| {
         initialize_vars!($name, _exec_env, args, $($tail:$type),*);
         $callback
@@ -136,6 +141,10 @@ fn predefined_procs() -> HashMap<String, BehaviorOrVar> {
     }
     Ok(Literal::String(String::from_utf8_lossy(&data).to_string()))
   }; bytes:list);
+  add_map!(r"\n", {Ok(Literal::String("\n".to_owned()))};);
+  add_map!(r"\r", {Ok(Literal::String("\r".to_owned()))};);
+  add_map!(r"\t", {Ok(Literal::String("\t".to_owned()))};);
+  add_map!(r"\0", {Ok(Literal::String("\0".to_owned()))};);
   add_map!("listing", {
     Ok(Literal::List(list))
   }, _exec_env, args;;list:list);

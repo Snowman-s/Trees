@@ -135,4 +135,11 @@ mod tests {
     assert_eq!(r, Ok(Literal::Int(7)));
     assert_eq!(o, "");
   }
+
+  #[test]
+  fn string_bytes() {
+    let (r, o, _) = exec_file(include_str!("test/string_bytes.tr"));
+    assert_eq!(r, Ok(Literal::Void));
+    assert_eq!(o, "AAA\n");
+  }
 }

@@ -122,6 +122,20 @@ fn predefined_procs() -> HashMap<String, BehaviorOrVar> {
   add_map!("split str", {
     Ok(Literal::List(origin.split(&spliter).map(|str|Literal::String(str.to_owned())).collect()))
   }; origin: str, spliter: str);
+  add_map!("str to bytes", {
+    Ok(Literal::List(string.as_bytes().iter().map(|b|Literal::Int((*b).into())).collect()))
+  }; string:str);
+  add_map!("bytes to str", {
+    let mut data = vec![];
+    for byte in bytes {
+      if let Literal::Int(b) = byte {
+        data.push(u8::try_from(b.to_owned()).map_err(|e| e.to_string())?); 
+      } else {
+        return Err(format!("Procesure {}: Executed result of arg {} must be int.", "bytes to str", byte.to_string()));
+      }
+    }
+    Ok(Literal::String(String::from_utf8_lossy(&data).to_string()))
+  }; bytes:list);
   add_map!("listing", {
     Ok(Literal::List(list))
   }, _exec_env, args;;list:list);

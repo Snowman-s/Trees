@@ -145,4 +145,11 @@ mod tests {
     assert_eq!(r, Ok(Literal::Void));
     assert_eq!(o, "AAA\n");
   }
+
+  #[test]
+  fn recursion() {
+    let (r, o, _) = exec_file(include_str!("test/recursion.tr"));
+    assert_eq!(r, Ok(Literal::Void));
+    assert_eq!(o, "6\n");
+  }
 }

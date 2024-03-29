@@ -130,17 +130,13 @@ impl ExecuteEnv {
         exec_args.push(result);
       }
     }
-    self.back_scope();
 
-    if let Some(behavior_or_var) = self.find_namespace(name) {
+    let result = if let Some(behavior_or_var) = self.find_namespace(name) {
       let behavior_or_var = behavior_or_var.clone();
       match behavior_or_var {
         BehaviorOrVar::Behavior(be) => be(self, &exec_args),
         BehaviorOrVar::BlockBehavior(block) => {
-          self.defset_var("$args", &Literal::List(exec_args.clone()));
-          for (i, arg) in exec_args.iter().enumerate() {
-            self.defset_var(&format!("${}", i), arg);
-          }
+          self.defset_args(exec_args);
 
           block.execute(self)
         }
@@ -154,7 +150,11 @@ impl ExecuteEnv {
       Ok(Literal::Void)
     } else {
       Err(format!("Undefined Proc Name {}", name))
-    }
+    }?;
+
+    self.back_scope();
+
+    Ok(result)
   }
 
   pub fn get_var(&mut self, name: &String) -> Result<Literal, String> {
@@ -166,7 +166,8 @@ impl ExecuteEnv {
   }
 
   pub fn defset_var(&mut self, name: &str, value: &Literal) {
-    self.scopes.last_mut().unwrap().namespace.insert(name.to_string(), BehaviorOrVar::Var(value.clone()));
+    let target = (self.scopes.len() - 2).clone();
+    self.scopes[target].namespace.insert(name.to_string(), BehaviorOrVar::Var(value.clone()));
   }
 
   pub fn set_var(&mut self, name: &String, value: &Literal) -> Result<(), String> {
@@ -178,20 +179,29 @@ impl ExecuteEnv {
     }
   }
 
+  pub fn defset_args(&mut self, args: Vec<Literal>) {
+    let target = &mut self.scopes.last_mut().unwrap().namespace;
+    target.insert("$args".to_string(), BehaviorOrVar::Var(Literal::List(args.clone())));
+    for (i, arg) in args.iter().enumerate() {
+      target.insert(format!("${}", i), BehaviorOrVar::Var(arg.clone()));
+    }
+  }
+
   pub fn def_proc(&mut self, name: &String, block: &Block) {
     let behavior = BehaviorOrVar::BlockBehavior(block.clone());
 
     if let Some(scope) = self.find_scope_mut(name) {
       scope.namespace.insert(name.to_string(), behavior);
     } else {
-      self.scopes.last_mut().unwrap().namespace.insert(name.to_string(), behavior);
+      let target = (self.scopes.len() - 2).clone();
+      self.scopes[target].namespace.insert(name.to_string(), behavior);
     };
   }
 
   pub fn export(&mut self, name: &String) -> Result<(), String> {
     if let Some(value) = self.find_namespace(name) {
       let value = value.clone();
-      let cont_index = (self.scopes.len() - 2).clone();
+      let cont_index = (self.scopes.len() - 3).clone();
       if let Some(context) = self.scopes.get_mut(cont_index) {
         context.namespace.insert(name.clone(), value.clone());
       };

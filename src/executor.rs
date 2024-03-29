@@ -185,10 +185,7 @@ fn predefined_procs() -> HashMap<String, BehaviorOrVar> {
     Ok(Literal::Void)
   }, exec_env, args; name: str, block:block);
   add_map!("exec", {
-    exec_env.defset_var("$args", &Literal::List(list.clone()));
-    for (i, arg) in list.iter().enumerate() {
-      exec_env.defset_var(&format!("${}", i), arg);
-    }
+    exec_env.defset_args(list);
 
     block.execute(exec_env)
   }, exec_env, args; block:block; list:list);

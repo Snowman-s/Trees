@@ -293,6 +293,12 @@ mod tests {
     };
   }
 
+  macro_rules! str {
+    ($str:expr) => {
+      format!("\"{}\"", $str)
+    };
+  }
+
   #[test]
   fn simple_summing() {
     let result = execute(*b!("+", vec![b!("3"), b!("4")]), Box::new(|_| panic!()));
@@ -312,16 +318,16 @@ mod tests {
       *b!(
         "seq",
         vec![
-          b!("defset", vec![b!("\"out\""), b!("\"\"")]),
+          b!("defset", vec![b!(str!("out")), b!(str!(""))]),
           b!(
             "for",
             vec![
               b!("15"),
-              b!("\"i\""),
+              b!(str!("i")),
               bq!(
                 "set",
                 vec![
-                  b!("\"out\""),
+                  b!(str!("out")),
                   b!(
                     "strcat",
                     vec![
@@ -330,17 +336,17 @@ mod tests {
                         "if0",
                         vec![
                           b!("%", vec![b!("+", vec![b!("i"), b!("1")]), b!("15")]),
-                          b!("\"FizzBuzz\""),
+                          b!(str!("FizzBuzz")),
                           b!(
                             "if0",
                             vec![
                               b!("%", vec![b!("+", vec![b!("i"), b!("1")]), b!("3")]),
-                              b!("\"Fizz\""),
+                              b!(str!("Fizz")),
                               b!(
                                 "if0",
                                 vec![
                                   b!("%", vec![b!("+", vec![b!("i"), b!("1")]), b!("5")]),
-                                  b!("\"Buzz\""),
+                                  b!(str!("Buzz")),
                                   b!("to str", vec![b!("+", vec![b!("i"), b!("1")])])
                                 ]
                               )
@@ -369,29 +375,29 @@ mod tests {
       *b!(
         "seq",
         vec![
-          b!("defset", vec![b!("\"out\""), b!("\"\"")]),
+          b!("defset", vec![b!(str!("out")), b!(str!(""))]),
           b!(
             "for",
             vec![
               b!("15"),
-              b!("\"i\""),
+              b!(str!("i")),
               bq!(
                 "seq",
                 vec![
                   b!(
                     "defset",
                     vec![
-                      b!("\"tmp\""),
+                      b!(str!("tmp")),
                       b!(
                         "strcat",
                         vec![
                           b!(
                             "ifn0",
-                            vec![b!("%", vec![b!("+", vec![b!("i"), b!("1")]), b!("3")]), b!("\"\""), b!("\"Fizz\"")]
+                            vec![b!("%", vec![b!("+", vec![b!("i"), b!("1")]), b!("3")]), b!(str!("")), b!(str!("Fizz"))]
                           ),
                           b!(
                             "ifn0",
-                            vec![b!("%", vec![b!("+", vec![b!("i"), b!("1")]), b!("5")]), b!("\"\""), b!("\"Buzz\"")]
+                            vec![b!("%", vec![b!("+", vec![b!("i"), b!("1")]), b!("5")]), b!(str!("")), b!(str!("Buzz"))]
                           )
                         ]
                       )
@@ -404,14 +410,14 @@ mod tests {
                       b!(
                         "ifn0",
                         vec![
-                          b!("=", vec![b!("tmp"), b!("\"\"")]),
+                          b!("=", vec![b!("tmp"), b!(str!(""))]),
                           b!("to str", vec![b!("+", vec![b!("i"), b!("1")])]),
                           b!("tmp")
                         ]
                       )
                     ]
                   ),
-                  b!("set", vec![b!("\"out\""), b!("strcat", vec![b!("out"), b!("tmp")])]),
+                  b!("set", vec![b!(str!("out")), b!("strcat", vec![b!("out"), b!("tmp")])]),
                 ]
               )
             ]
@@ -428,7 +434,7 @@ mod tests {
   #[test]
   fn cannot_refer_inside() {
     let result = execute(
-      *b!("seq", vec![b!("seq", vec![b!("defset", vec![b!("\"out\""), b!("3")])]), b!("out")]),
+      *b!("seq", vec![b!("seq", vec![b!("defset", vec![b!(str!("out")), b!("3")])]), b!("out")]),
       Box::new(|_| panic!()),
     );
 
@@ -441,7 +447,7 @@ mod tests {
       *b!(
         "seq",
         vec![
-          b!("seq", vec![b!("defset", vec![b!("\"out\""), b!("3")]), b!("export", vec![b!("\"out\"")])]),
+          b!("seq", vec![b!("defset", vec![b!(str!("out")), b!("3")]), b!("export", vec![b!(str!("out"))])]),
           b!("out")
         ]
       ),

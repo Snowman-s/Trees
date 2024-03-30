@@ -100,6 +100,10 @@ fn predefined_procs() -> HashMap<String, BehaviorOrVar> {
   add_map!("/", {Ok(Literal::Int(a / b))}; a:int, b:int);
   add_map!("%", {Ok(Literal::Int(a % b))}; a:int, b:int);
   add_map!("=", {Ok(Literal::Int(if a == b { 1 } else { 0 }))}; a:any, b:any);
+  add_map!("<", {Ok(Literal::Int(if a < b { 1 } else { 0 }))}; a:int, b:int);
+  add_map!(">", {Ok(Literal::Int(if a > b { 1 } else { 0 }))}; a:int, b:int);
+  add_map!("<=", {Ok(Literal::Int(if a <= b { 1 } else { 0 }))}; a:int, b:int);
+  add_map!(">=", {Ok(Literal::Int(if a >= b { 1 } else { 0 }))}; a:int, b:int);
   add_map!("strcat", {Ok(Literal::String(format!("{}{}", a, b)))}; a:str, b:str);
   add_map!("to str", {Ok(Literal::String(a.to_string()))}; a:any);
   add_map!("str to int", {
@@ -423,6 +427,34 @@ mod tests {
     );
 
     assert_eq!(result, Ok(Literal::String("12Fizz4BuzzFizz78FizzBuzz11Fizz1314FizzBuzz".to_string())))
+  }
+
+  #[test]
+  fn compare_smaller() {
+    let result = execute(*b!("ifn0", vec![b!("<", vec![b!("3"), b!("5")]), b!("1"), b!("0")]), Box::new(|_| panic!()));
+
+    assert_eq!(result, Ok(Literal::Int(1)))
+  }
+
+  #[test]
+  fn compare_greater() {
+    let result = execute(*b!("ifn0", vec![b!(">", vec![b!("3"), b!("5")]), b!("1"), b!("0")]), Box::new(|_| panic!()));
+
+    assert_eq!(result, Ok(Literal::Int(0)))
+  }
+
+  #[test]
+  fn compare_smaller_equal() {
+    let result = execute(*b!("ifn0", vec![b!("<=", vec![b!("3"), b!("3")]), b!("1"), b!("0")]), Box::new(|_| panic!()));
+
+    assert_eq!(result, Ok(Literal::Int(1)))
+  }
+
+  #[test]
+  fn compare_greater_equal() {
+    let result = execute(*b!("ifn0", vec![b!("<=", vec![b!("5"), b!("5")]), b!("1"), b!("0")]), Box::new(|_| panic!()));
+
+    assert_eq!(result, Ok(Literal::Int(1)))
   }
 
   #[test]

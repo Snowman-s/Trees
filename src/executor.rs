@@ -410,7 +410,7 @@ mod tests {
                   b!(
                     "set",
                     vec![
-                      b!("\"tmp\""),
+                      b!(str!("tmp")),
                       b!(
                         "ifn0",
                         vec![
@@ -475,7 +475,7 @@ mod tests {
 
   #[test]
   fn split_string() {
-    let result = execute(*b!("split str", vec![b!("\"abc def ghi\""), b!("\" \"")]), Box::new(|_| panic!()));
+    let result = execute(*b!("split str", vec![b!(str!("abc def ghi")), b!(str!(" "))]), Box::new(|_| panic!()));
 
     assert_eq!(
       result,
@@ -489,7 +489,7 @@ mod tests {
 
   #[test]
   fn split_string_per_char() {
-    let result = execute(*b!("split str", vec![b!("\"abc\""), b!("\"\"")]), Box::new(|_| panic!()));
+    let result = execute(*b!("split str", vec![b!(str!("abc")), b!(str!(""))]), Box::new(|_| panic!()));
 
     assert_eq!(
       result,

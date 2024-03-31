@@ -75,6 +75,12 @@ fn predefined_procs() -> HashMap<String, BehaviorOrVar> {
       };
       let $tail = $tail.clone();
     };
+    ($name: expr, $env:expr, $block:expr, $tail:ident:truth) => {
+      let Literal::Boolean($tail) = $block else {
+        return Err(format!("Procedure {}: Executed result of arg {} must be truth.", $name, $block.to_string()));
+      };
+      let $tail = $tail.clone();
+    };
     ($name: expr, $env:expr, $block:expr, $tail:ident:block) => {
       let Literal::Block($tail) = $block else {
         return Err(format!("Procesure {}: Executed result of arg {} must be block.", $name, $block.to_string()));
@@ -100,6 +106,9 @@ fn predefined_procs() -> HashMap<String, BehaviorOrVar> {
   add_map!("/", {Ok(Literal::Int(a / b))}; a:int, b:int);
   add_map!("%", {Ok(Literal::Int(a % b))}; a:int, b:int);
   add_map!("=", {Ok(Literal::Int(if a == b { 1 } else { 0 }))}; a:any, b:any);
+  add_map!("&", {Ok(Literal::Boolean(a & b))}; a:truth, b:truth);
+  add_map!("|", {Ok(Literal::Boolean(a | b))}; a:truth, b:truth);
+  add_map!("^", {Ok(Literal::Boolean(a ^ b))}; a:truth, b:truth);
   add_map!("<", {Ok(Literal::Int(if a < b { 1 } else { 0 }))}; a:int, b:int);
   add_map!(">", {Ok(Literal::Int(if a > b { 1 } else { 0 }))}; a:int, b:int);
   add_map!("<=", {Ok(Literal::Int(if a <= b { 1 } else { 0 }))}; a:int, b:int);
@@ -461,6 +470,27 @@ mod tests {
     let result = execute(*b!("ifn0", vec![b!("<=", vec![b!("5"), b!("5")]), b!("1"), b!("0")]), Box::new(|_| panic!()));
 
     assert_eq!(result, Ok(Literal::Int(1)))
+  }
+
+  #[test]
+  fn bool_and() {
+    let result = execute(*b!("&", vec![b!("true"), b!("true")]), Box::new(|_| panic!()));
+
+    assert_eq!(result, Ok(Literal::Boolean(true)))
+  }
+
+  #[test]
+  fn bool_or() {
+    let result = execute(*b!("|", vec![b!("true"), b!("false")]), Box::new(|_| panic!()));
+
+    assert_eq!(result, Ok(Literal::Boolean(true)))
+  }
+
+  #[test]
+  fn bool_xor() {
+    let result = execute(*b!("^", vec![b!("true"), b!("false")]), Box::new(|_| panic!()));
+
+    assert_eq!(result, Ok(Literal::Boolean(true)))
   }
 
   #[test]

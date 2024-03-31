@@ -109,10 +109,10 @@ fn predefined_procs() -> HashMap<String, BehaviorOrVar> {
   add_map!("AND", {Ok(Literal::Boolean(a & b))}; a:boolean, b:boolean);
   add_map!("OR", {Ok(Literal::Boolean(a | b))}; a:boolean, b:boolean);
   add_map!("XOR", {Ok(Literal::Boolean(a ^ b))}; a:boolean, b:boolean);
-  add_map!("<", {Ok(Literal::Int(if a < b { 1 } else { 0 }))}; a:int, b:int);
-  add_map!(">", {Ok(Literal::Int(if a > b { 1 } else { 0 }))}; a:int, b:int);
-  add_map!("<=", {Ok(Literal::Int(if a <= b { 1 } else { 0 }))}; a:int, b:int);
-  add_map!(">=", {Ok(Literal::Int(if a >= b { 1 } else { 0 }))}; a:int, b:int);
+  add_map!("<", {Ok(Literal::Boolean(a < b))}; a:int, b:int);
+  add_map!(">", {Ok(Literal::Boolean(a > b))}; a:int, b:int);
+  add_map!("<=", {Ok(Literal::Boolean(a <= b))}; a:int, b:int);
+  add_map!(">=", {Ok(Literal::Boolean(a >= b))}; a:int, b:int);
   add_map!("strcat", {Ok(Literal::String(format!("{}{}", a, b)))}; a:str, b:str);
   add_map!("to str", {Ok(Literal::String(a.to_string()))}; a:any);
   add_map!("str to int", {

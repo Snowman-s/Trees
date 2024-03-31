@@ -1,5 +1,5 @@
 use regex::Regex;
-use std::{collections::HashMap, str::FromStr, sync::OnceLock};
+use std::{collections::HashMap, sync::OnceLock};
 
 #[derive(PartialEq, Eq, Debug, Clone)]
 pub enum Literal {

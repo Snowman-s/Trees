@@ -461,21 +461,21 @@ mod tests {
 
   #[test]
   fn compare_greater() {
-    let result = execute(*b!("ifn0", vec![b!(">", vec![b!("3"), b!("5")]), b!("1"), b!("0")]), Box::new(|_| panic!()));
+    let result = execute(*b!("if", vec![b!(">", vec![b!("3"), b!("5")]), b!("1"), b!("0")]), Box::new(|_| panic!()));
 
     assert_eq!(result, Ok(Literal::Int(0)))
   }
 
   #[test]
   fn compare_smaller_equal() {
-    let result = execute(*b!("ifn0", vec![b!("<=", vec![b!("3"), b!("3")]), b!("1"), b!("0")]), Box::new(|_| panic!()));
+    let result = execute(*b!("if", vec![b!("<=", vec![b!("3"), b!("3")]), b!("1"), b!("0")]), Box::new(|_| panic!()));
 
     assert_eq!(result, Ok(Literal::Int(1)))
   }
 
   #[test]
   fn compare_greater_equal() {
-    let result = execute(*b!("ifn0", vec![b!("<=", vec![b!("5"), b!("5")]), b!("1"), b!("0")]), Box::new(|_| panic!()));
+    let result = execute(*b!("if", vec![b!("<=", vec![b!("5"), b!("5")]), b!("1"), b!("0")]), Box::new(|_| panic!()));
 
     assert_eq!(result, Ok(Literal::Int(1)))
   }

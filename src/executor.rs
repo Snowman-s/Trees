@@ -138,7 +138,7 @@ fn predefined_procs() -> HashMap<String, BehaviorOrVar> {
   add_map!("read line", { Ok(Literal::String(exec_env.read_line())) }, exec_env, args;);
 
   add_map!("split str", {
-    Ok(Literal::List(origin.split(&spliter).map(|str|Literal::String(str.to_owned())).collect()))
+    Ok(Literal::List(origin.split(&spliter).filter(|str| !str.is_empty()).map(|str|Literal::String(str.to_owned())).collect()))
   }; origin: str, spliter: str);
   add_map!("str to bytes", {
     Ok(Literal::List(string.as_bytes().iter().map(|b|Literal::Int((*b).into())).collect()))
@@ -419,7 +419,7 @@ mod tests {
                   b!(
                     "set",
                     vec![
-                      b!("\"tmp\""),
+                      b!(str!("tmp")),
                       b!(
                         "ifn0",
                         vec![
@@ -501,6 +501,34 @@ mod tests {
     );
 
     assert!(result.is_err());
+  }
+
+  #[test]
+  fn split_string() {
+    let result = execute(*b!("split str", vec![b!(str!("abc def ghi")), b!(str!(" "))]), Box::new(|_| panic!()));
+
+    assert_eq!(
+      result,
+      Ok(Literal::List(vec![
+        Literal::String("abc".to_string()),
+        Literal::String("def".to_string()),
+        Literal::String("ghi".to_string())
+      ]))
+    )
+  }
+
+  #[test]
+  fn split_string_per_char() {
+    let result = execute(*b!("split str", vec![b!(str!("abc")), b!(str!(""))]), Box::new(|_| panic!()));
+
+    assert_eq!(
+      result,
+      Ok(Literal::List(vec![
+        Literal::String("a".to_string()),
+        Literal::String("b".to_string()),
+        Literal::String("c".to_string())
+      ]))
+    )
   }
 
   #[test]

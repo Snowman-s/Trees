@@ -1,10 +1,11 @@
 use regex::Regex;
-use std::{collections::HashMap, sync::OnceLock};
+use std::{collections::HashMap, str::FromStr, sync::OnceLock};
 
 #[derive(PartialEq, Eq, Debug, Clone)]
 pub enum Literal {
   Int(i64),
   String(String),
+  Boolean(bool),
   Block(Block),
   List(Vec<Literal>),
   Void,
@@ -15,6 +16,7 @@ impl ToString for Literal {
     match self {
       Literal::Int(i) => i.to_string(),
       Literal::String(s) => s.clone(),
+      Literal::Boolean(b) => b.to_string(),
       Literal::Block(b) => format!("Block {}", b.proc_name),
       Literal::List(list) => {
         format!(
@@ -71,6 +73,13 @@ fn to_int(str: &String) -> Option<i64> {
     i64::from_str_radix(str, 10).ok()
   } else {
     None
+  }
+}
+
+fn to_bool(str: &String) -> Option<bool> {
+  match str.parse::<bool>() {
+    Ok(arg) => Some(arg),
+    Err(_) => None,
   }
 }
 
@@ -146,6 +155,8 @@ impl ExecuteEnv {
       Ok(Literal::String(name[1..(name.len() - 1)].to_string()))
     } else if let Some(int) = to_int(name) {
       Ok(Literal::Int(int))
+    } else if let Some(boolean) = to_bool(name) {
+      Ok(Literal::Boolean(boolean))
     } else if name == "" {
       Ok(Literal::Void)
     } else {

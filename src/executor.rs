@@ -75,6 +75,12 @@ fn predefined_procs() -> HashMap<String, BehaviorOrVar> {
       };
       let $tail = $tail.clone();
     };
+    ($name: expr, $env:expr, $block:expr, $tail:ident:boolean) => {
+      let Literal::Boolean($tail) = $block else {
+        return Err(format!("Procedure {}: Executed result of arg {} must be boolean.", $name, $block.to_string()));
+      };
+      let $tail = $tail.clone();
+    };
     ($name: expr, $env:expr, $block:expr, $tail:ident:block) => {
       let Literal::Block($tail) = $block else {
         return Err(format!("Procesure {}: Executed result of arg {} must be block.", $name, $block.to_string()));
@@ -99,11 +105,14 @@ fn predefined_procs() -> HashMap<String, BehaviorOrVar> {
   add_map!("*", {Ok(Literal::Int(a * b))}; a:int, b:int);
   add_map!("/", {Ok(Literal::Int(a / b))}; a:int, b:int);
   add_map!("%", {Ok(Literal::Int(a % b))}; a:int, b:int);
-  add_map!("=", {Ok(Literal::Int(if a == b { 1 } else { 0 }))}; a:any, b:any);
-  add_map!("<", {Ok(Literal::Int(if a < b { 1 } else { 0 }))}; a:int, b:int);
-  add_map!(">", {Ok(Literal::Int(if a > b { 1 } else { 0 }))}; a:int, b:int);
-  add_map!("<=", {Ok(Literal::Int(if a <= b { 1 } else { 0 }))}; a:int, b:int);
-  add_map!(">=", {Ok(Literal::Int(if a >= b { 1 } else { 0 }))}; a:int, b:int);
+  add_map!("=", {Ok(Literal::Boolean(a == b))}; a:any, b:any);
+  add_map!("AND", {Ok(Literal::Boolean(a & b))}; a:boolean, b:boolean);
+  add_map!("OR", {Ok(Literal::Boolean(a | b))}; a:boolean, b:boolean);
+  add_map!("XOR", {Ok(Literal::Boolean(a ^ b))}; a:boolean, b:boolean);
+  add_map!("<", {Ok(Literal::Boolean(a < b))}; a:int, b:int);
+  add_map!(">", {Ok(Literal::Boolean(a > b))}; a:int, b:int);
+  add_map!("<=", {Ok(Literal::Boolean(a <= b))}; a:int, b:int);
+  add_map!(">=", {Ok(Literal::Boolean(a >= b))}; a:int, b:int);
   add_map!("strcat", {Ok(Literal::String(format!("{}{}", a, b)))}; a:str, b:str);
   add_map!("to str", {Ok(Literal::String(a.to_string()))}; a:any);
   add_map!("str to int", {
@@ -184,6 +193,14 @@ fn predefined_procs() -> HashMap<String, BehaviorOrVar> {
       then
     })
   }; cond:any, then:any, els:any );
+  add_map!("if", {
+    Ok(if cond {
+        then 
+      } else {
+        els 
+      }
+    )
+  }; cond:boolean, then:any, els:any);
   add_map!("defproc", {
     exec_env.def_proc(&name, &block);
     Ok(Literal::Void)
@@ -412,7 +429,7 @@ mod tests {
                     vec![
                       b!(str!("tmp")),
                       b!(
-                        "ifn0",
+                        "if",
                         vec![
                           b!("=", vec![b!("tmp"), b!(str!(""))]),
                           b!("to str", vec![b!("+", vec![b!("i"), b!("1")])]),
@@ -444,23 +461,44 @@ mod tests {
 
   #[test]
   fn compare_greater() {
-    let result = execute(*b!("ifn0", vec![b!(">", vec![b!("3"), b!("5")]), b!("1"), b!("0")]), Box::new(|_| panic!()));
+    let result = execute(*b!("if", vec![b!(">", vec![b!("3"), b!("5")]), b!("1"), b!("0")]), Box::new(|_| panic!()));
 
     assert_eq!(result, Ok(Literal::Int(0)))
   }
 
   #[test]
   fn compare_smaller_equal() {
-    let result = execute(*b!("ifn0", vec![b!("<=", vec![b!("3"), b!("3")]), b!("1"), b!("0")]), Box::new(|_| panic!()));
+    let result = execute(*b!("if", vec![b!("<=", vec![b!("3"), b!("3")]), b!("1"), b!("0")]), Box::new(|_| panic!()));
 
     assert_eq!(result, Ok(Literal::Int(1)))
   }
 
   #[test]
   fn compare_greater_equal() {
-    let result = execute(*b!("ifn0", vec![b!("<=", vec![b!("5"), b!("5")]), b!("1"), b!("0")]), Box::new(|_| panic!()));
+    let result = execute(*b!("if", vec![b!("<=", vec![b!("5"), b!("5")]), b!("1"), b!("0")]), Box::new(|_| panic!()));
 
     assert_eq!(result, Ok(Literal::Int(1)))
+  }
+
+  #[test]
+  fn bool_and() {
+    let result = execute(*b!("AND", vec![b!("true"), b!("true")]), Box::new(|_| panic!()));
+
+    assert_eq!(result, Ok(Literal::Boolean(true)))
+  }
+
+  #[test]
+  fn bool_or() {
+    let result = execute(*b!("OR", vec![b!("true"), b!("false")]), Box::new(|_| panic!()));
+
+    assert_eq!(result, Ok(Literal::Boolean(true)))
+  }
+
+  #[test]
+  fn bool_xor() {
+    let result = execute(*b!("XOR", vec![b!("true"), b!("false")]), Box::new(|_| panic!()));
+
+    assert_eq!(result, Ok(Literal::Boolean(true)))
   }
 
   #[test]

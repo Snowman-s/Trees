@@ -68,7 +68,7 @@ pub struct ExecuteEnv {
 
 fn to_int(str: &String) -> Option<i64> {
   static REGEX: OnceLock<regex::Regex> = OnceLock::<Regex>::new();
-  let regex = REGEX.get_or_init(|| Regex::new(r"^[0-9]+$").unwrap());
+  let regex = REGEX.get_or_init(|| Regex::new(r"^(\+|-)?[0-9]+$").unwrap());
   if regex.is_match(str) {
     i64::from_str_radix(str, 10).ok()
   } else {

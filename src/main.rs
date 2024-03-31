@@ -83,6 +83,13 @@ mod tests {
   }
 
   #[test]
+  fn minus() {
+    let (r, o, _) = exec_file(include_str!("test/minus.tr"));
+    assert_eq!(r, Ok(Literal::Void));
+    assert_eq!(o, "-1\n");
+  }
+
+  #[test]
   fn println() {
     let (r, o, _) = exec_file(include_str!("test/println.tr"));
     assert_eq!(r, Ok(Literal::Void));

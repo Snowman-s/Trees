@@ -191,7 +191,7 @@ fn find_blocks(code_splited: &Vec<Vec<String>>) -> Vec<CompilingBlock> {
 
   for y in 0..code_splited.len() {
     for x in 0..code_splited[y].len() {
-      if let Some(b) = find_a_block(&code_splited, x, y) {
+      if let Some(b) = find_a_block(code_splited, x, y) {
         blocks.push(b);
       }
     }
@@ -254,7 +254,7 @@ fn find_next_edge(code: &Vec<Vec<String>>, x: &usize, y: &usize, ori: &Orientati
 
 fn connect_blocks(code: &Vec<Vec<String>>, blocks: &Vec<CompilingBlock>) -> Result<Block, String> {
   let mut blocks_clone = blocks.clone();
-  let head_candinates: Vec<usize> = blocks.into_iter().enumerate().filter_map(|(i, block)| if block.block_plug.is_some() { None } else { Some(i) }).collect();
+  let head_candinates: Vec<usize> = blocks.iter().enumerate().filter_map(|(i, block)| if block.block_plug.is_some() { None } else { Some(i) }).collect();
 
   if head_candinates.len() != 1 {
     return Err(format!(
@@ -286,15 +286,9 @@ fn connect_blocks(code: &Vec<Vec<String>>, blocks: &Vec<CompilingBlock>) -> Resu
       }
 
       let (index, _) = blocks
-        .into_iter()
+        .iter()
         .enumerate()
-        .find(|(_, b)| {
-          if let Some(p) = &b.block_plug {
-            p.x == mut_x.clone() && p.y == mut_y.clone()
-          } else {
-            false
-          }
-        })
+        .find(|(_, b)| if let Some(p) = &b.block_plug { p.x == mut_x && p.y == mut_y } else { false })
         .ok_or(format!("No block-plug found at ({}, {})", mut_x, mut_y))?;
 
       block.args.push((*expand, index));
@@ -305,7 +299,7 @@ fn connect_blocks(code: &Vec<Vec<String>>, blocks: &Vec<CompilingBlock>) -> Resu
 }
 
 fn split_code(code: &Vec<String>) -> Vec<Vec<String>> {
-  code.iter().map(|s| s.split("").into_iter().filter_map(|s| if s == "" { None } else { Some(s.to_owned()) }).collect()).collect()
+  code.iter().map(|s| s.split("").filter_map(|s| if s.is_empty() { None } else { Some(s.to_owned()) }).collect()).collect()
 }
 
 pub fn compile(code: Vec<String>) -> Result<Block, String> {

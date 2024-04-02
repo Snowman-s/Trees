@@ -1,30 +1,30 @@
 use std::{collections::HashMap, process::Command};
 
-use crate::structs::{BehaviorOrVar, Block, ExecuteEnv, Literal};
+use crate::structs::{Block, ExecuteEnv, Includer, Literal, ProcedureOrVar};
 
-fn predefined_procs() -> HashMap<String, BehaviorOrVar> {
-  let mut map: HashMap<String, BehaviorOrVar> = HashMap::new();
+fn predefined_procs() -> HashMap<String, ProcedureOrVar> {
+  let mut map: HashMap<String, ProcedureOrVar> = HashMap::new();
 
   macro_rules! add_map {
     ($name:expr, $callback:block; ) => {{
-      map.insert($name.to_string(), BehaviorOrVar::Behavior(|_exec_env, _args| {
+      map.insert($name.to_string(), ProcedureOrVar::FnProcedure(|_exec_env, _args| {
         $callback
       }))
     }};
     ($name:expr, $callback:block; $($tail:ident:$type:tt),+ ) => {{
-      map.insert($name.to_string(), BehaviorOrVar::Behavior(|_exec_env, args| {
+      map.insert($name.to_string(), ProcedureOrVar::FnProcedure(|_exec_env, args| {
         initialize_vars!($name, _exec_env, args, $($tail:$type),*);
         $callback
       }))
     }};
     ($name:expr, $callback:block, $exec_env:ident, $args:ident; $($tail:ident:$type:tt),* ) => {{
-      map.insert($name.to_string(), BehaviorOrVar::Behavior(|$exec_env, $args| {
+      map.insert($name.to_string(), ProcedureOrVar::FnProcedure(|$exec_env, $args| {
         initialize_vars!($name, $exec_env, $args, $($tail:$type),*);
         $callback
       }))
     }};
     ($name:expr, $callback:block, $exec_env:ident, $args:ident; $($tail:ident:$type:tt),*; $list:ident:list ) => {{
-      map.insert($name.to_string(), BehaviorOrVar::Behavior(|$exec_env, $args| {
+      map.insert($name.to_string(), ProcedureOrVar::FnProcedure(|$exec_env, $args| {
         initialize_vars!($name, $exec_env, $args, $($tail:$type),*; $list:list);
         $callback
       }))
@@ -116,7 +116,7 @@ fn predefined_procs() -> HashMap<String, BehaviorOrVar> {
   add_map!("strcat", {Ok(Literal::String(format!("{}{}", a, b)))}; a:str, b:str);
   add_map!("to str", {Ok(Literal::String(a.to_string()))}; a:any);
   add_map!("str to int", {
-    Ok(Literal::Int(i64::from_str_radix(&a, 10).map_err(|e|e.to_string())?))
+    Ok(Literal::Int(a.parse::<i64>().map_err(|e|e.to_string())?))
   }; a:str);
   add_map!("get", {exec_env.get_var(&name)}, exec_env, _args; name:str);
   add_map!("defset", {
@@ -163,7 +163,7 @@ fn predefined_procs() -> HashMap<String, BehaviorOrVar> {
   }, _exec_env, args;;list:list);
   add_map!("[]", {
     let index_usize:usize = usize::try_from( index).map_err(|e|e.to_string())?;
-    list.get(index_usize).map(|lit|lit.clone()).ok_or("Index out of range".to_string())
+    list.get(index_usize).cloned().ok_or("Index out of range".to_string())
   };list:list, index:int);
   add_map!("len", {
     Ok(Literal::Int(i64::try_from(list.len()).map_err(|err|err.to_string())?))
@@ -224,7 +224,7 @@ fn predefined_procs() -> HashMap<String, BehaviorOrVar> {
         return Err(format!("Procesure {}: Executed result of arg {} must be str.", "cmd", l.to_string()));
       }
     }
-    exec_env.cmd(cmd, args).map(|responce|Literal::String(responce))
+    exec_env.cmd(cmd, args).map(Literal::String)
   }, exec_env, args; cmd:str; list:list );
 
   add_map!("include", {
@@ -234,7 +234,7 @@ fn predefined_procs() -> HashMap<String, BehaviorOrVar> {
   map
 }
 
-pub fn execute(tree: Block, includer: Box<dyn FnMut(&Vec<String>) -> Result<Block, String>>) -> Result<Literal, String> {
+pub fn execute(tree: Block, includer: Includer) -> Result<Literal, String> {
   execute_with_mock(
     tree,
     Box::new(|| {
@@ -262,7 +262,7 @@ pub fn execute_with_mock(
   input_stream: Box<dyn FnMut() -> String>,
   out_stream: Box<dyn FnMut(String)>,
   cmd_executor: Box<dyn FnMut(String, Vec<String>) -> Result<String, String>>,
-  includer: Box<dyn FnMut(&Vec<String>) -> Result<Block, String>>,
+  includer: Includer,
 ) -> Result<Literal, String> {
   let procs = predefined_procs();
   let mut exec_env = ExecuteEnv::new(procs, input_stream, out_stream, cmd_executor, includer);

@@ -12,7 +12,7 @@ fn main() {
   let args: Vec<String> = env::args().collect();
   let code_file = &args[1];
 
-  let path = Rc::new(env::current_dir().unwrap().join(&code_file));
+  let path = Rc::new(env::current_dir().unwrap().join(code_file));
   let block = compile_file(path.to_path_buf()).unwrap();
   execute(
     block,
@@ -22,11 +22,11 @@ fn main() {
 }
 
 fn compile_file(file_path: PathBuf) -> Result<Block, String> {
-  let mut codes = File::open(&file_path).map_err(|err| format!("failed to read {:?}: {}", &file_path.to_str(), err.to_string()))?;
+  let mut codes = File::open(&file_path).map_err(|err| format!("failed to read {:?}: {}", &file_path.to_str(), err))?;
   let mut buf: String = String::new();
-  codes.read_to_string(&mut buf).map_err(|err| format!("failed to read {:?}: {}", &file_path.to_str(), err.to_string()))?;
+  codes.read_to_string(&mut buf).map_err(|err| format!("failed to read {:?}: {}", &file_path.to_str(), err))?;
 
-  compile(buf.split("\n").map(|t| t.to_owned()).collect())
+  compile(buf.split('\n').map(|t| t.to_owned()).collect())
 }
 
 #[cfg(test)]
@@ -71,10 +71,10 @@ mod tests {
     let cmd_log_ref = cmd_log.clone();
     let cmd_executor = Box::new(move |cmd, args| {
       (*cmd_log.borrow_mut()).push((cmd, args));
-      return Ok("".to_string());
+      Ok("".to_string())
     });
 
-    let code_lines: Vec<String> = code.split("\n").map(|c| c.to_owned()).collect();
+    let code_lines: Vec<String> = code.split('\n').map(|c| c.to_owned()).collect();
     let result = compile(code_lines).and_then(|b| execute_with_mock(b, Box::new(|| panic!()), out_stream, cmd_executor, Box::new(|_| panic!())));
 
     let out = out_ref.borrow().clone();

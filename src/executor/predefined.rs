@@ -179,6 +179,25 @@ pub fn predefined_procs() -> HashMap<String, ProcedureOrVar> {
     }
     Ok(Literal::Void)
   }, exec_env, args; times:int, var:str, child:block);
+  add_map!("while", {
+    loop {
+      let cond_res = {
+        match cond.execute(exec_env) {
+          Ok(res) => {
+            if let Literal::Boolean(res_bool) = res {
+              res_bool
+            } else {
+              return Err(format!("Procedure while: Executed result of arg {} must be boolean.",  res.to_string()));
+            }
+          },
+          Err(err) => {return Err(err);}
+        }
+      };
+      if !cond_res {break;} 
+      child.execute(exec_env)?;
+    }
+    Ok(Literal::Void)
+  }, exec_env, args; cond:block, child:block);
   add_map!("if0", {
     Ok(if let Literal::Int(0) = cond {
       then

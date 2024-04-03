@@ -65,7 +65,7 @@ mod tests {
     let out = Rc::new(RefCell::new("".to_owned()));
     let out_ref = out.clone();
     let out_stream = Box::new(move |msg| {
-      *out.borrow_mut() = msg;
+      (*out.borrow_mut()).extend([msg]);
     });
     let cmd_log: Rc<RefCell<Vec<(String, Vec<String>)>>> = Rc::new(RefCell::new(vec![]));
     let cmd_log_ref = cmd_log.clone();
@@ -158,5 +158,12 @@ mod tests {
     let (r, o, _) = exec_file(include_str!("test/recursion.tr"));
     assert_eq!(r, Ok(Literal::Void));
     assert_eq!(o, "6\n");
+  }
+
+  #[test]
+  fn tr_while() {
+    let (r, o, _) = exec_file(include_str!("test/tr_while.tr"));
+    assert_eq!(r, Ok(Literal::Void));
+    assert_eq!(o, "012");
   }
 }

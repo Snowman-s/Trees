@@ -225,9 +225,8 @@ pub fn predefined_procs() -> HashMap<String, ProcedureOrVar> {
     Ok(Literal::Void)
   }, exec_env, args; name: str, block:block);
   add_map!("exec", {
-    exec_env.defset_args(list);
-
-    block.execute(exec_env)
+    exec_env.defset_args(&list);
+    block.execute_without_scope(exec_env)
   }, exec_env, args; block:block; list:list);
   add_map!("export", {
     exec_env.export(&name)?;

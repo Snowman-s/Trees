@@ -111,20 +111,6 @@ mod tests {
   }
 
   #[test]
-  fn modules() {
-    let (r, o, _) = exec_file(include_str!("test/modules.tr"));
-    assert_eq!(r, Ok(Literal::Void));
-    assert_eq!(o, "6");
-  }
-
-  #[test]
-  fn modules_err() {
-    let (r, o, _) = exec_file(include_str!("test/modules_err.tr"));
-    assert!(r.is_err());
-    assert_eq!(o, "");
-  }
-
-  #[test]
   fn substance() {
     let (r, o, _) = exec_file(include_str!("test/substance.tr"));
     assert_eq!(r, Ok(Literal::Void));
@@ -165,5 +151,37 @@ mod tests {
     let (r, o, _) = exec_file(include_str!("test/tr_while.tr"));
     assert_eq!(r, Ok(Literal::Void));
     assert_eq!(o, "012");
+  }
+
+  mod modules {
+    use crate::{structs::Literal, tests::exec_file};
+
+    #[test]
+    fn modules() {
+      let (r, o, _) = exec_file(include_str!("test/modules/modules.tr"));
+      assert_eq!(r, Ok(Literal::Void));
+      assert_eq!(o, "6");
+    }
+
+    #[test]
+    fn modules_err() {
+      let (r, o, _) = exec_file(include_str!("test/modules/modules_err.tr"));
+      assert!(r.is_err());
+      assert_eq!(o, "");
+    }
+
+    #[test]
+    fn tereport_var() {
+      let (r, o, _) = exec_file(include_str!("test/modules/tereport_var.tr"));
+      assert_eq!(r, Ok(Literal::Void));
+      assert_eq!(o, "42");
+    }
+
+    #[test]
+    fn tereport_var_2times() {
+      let (r, o, _) = exec_file(include_str!("test/modules/tereport_var_2times.tr"));
+      assert_eq!(r, Ok(Literal::Void));
+      assert_eq!(o, "42");
+    }
   }
 }

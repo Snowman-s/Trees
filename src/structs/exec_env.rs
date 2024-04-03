@@ -85,8 +85,15 @@ impl ExecuteEnv {
     self.find_scope_mut(name).and_then(|c| c.namespace.get_mut(name))
   }
 
-  pub fn execute(&mut self, name: &String, args: &Vec<(bool, Box<Block>)>) -> Result<Literal, String> {
-    self.new_scope();
+  pub fn defset_args(&mut self, args: &Vec<Literal>) {
+    let namespace = &mut self.scopes.last_mut().unwrap().namespace;
+    namespace.insert("$args".to_string(), ProcedureOrVar::Var(Literal::List(args.clone())));
+    for (i, arg) in args.iter().enumerate() {
+      namespace.insert(format!("${}", i), ProcedureOrVar::Var(arg.clone()));
+    }
+  }
+
+  pub fn execute_procedure(&mut self, name: &String, args: &Vec<(bool, Box<Block>)>) -> Result<Literal, String> {
     let mut exec_args = vec![];
     for (expand, arg) in args {
       let result = arg.execute(self)?;
@@ -100,14 +107,13 @@ impl ExecuteEnv {
       }
     }
 
-    let result = if let Some(behavior_or_var) = self.find_namespace(name) {
+    if let Some(behavior_or_var) = self.find_namespace(name) {
       let behavior_or_var = behavior_or_var.clone();
       match behavior_or_var {
         ProcedureOrVar::FnProcedure(be) => be(self, &exec_args),
         ProcedureOrVar::BlockProcedure(block) => {
-          self.defset_args(exec_args);
-
-          block.execute(self)
+          self.defset_args(&exec_args);
+          block.execute_without_scope(self)
         }
         ProcedureOrVar::Var(var) => Ok(var.clone()),
       }
@@ -121,11 +127,7 @@ impl ExecuteEnv {
       Ok(Literal::Void)
     } else {
       Err(format!("Undefined Proc Name {}", name))
-    }?;
-
-    self.back_scope();
-
-    Ok(result)
+    }
   }
 
   pub fn get_var(&mut self, name: &String) -> Result<Literal, String> {
@@ -147,14 +149,6 @@ impl ExecuteEnv {
       Ok(())
     } else {
       Err(format!("Variable {} is not defined", name))
-    }
-  }
-
-  pub fn defset_args(&mut self, args: Vec<Literal>) {
-    let target = &mut self.scopes.last_mut().unwrap().namespace;
-    target.insert("$args".to_string(), ProcedureOrVar::Var(Literal::List(args.clone())));
-    for (i, arg) in args.iter().enumerate() {
-      target.insert(format!("${}", i), ProcedureOrVar::Var(arg.clone()));
     }
   }
 
@@ -210,7 +204,7 @@ impl ExecuteEnv {
 
     // 実行
     self.paths.push(parent);
-    let result = block.execute(self)?;
+    let result = block.execute_without_scope(self)?;
     self.paths.pop();
 
     Ok(result)

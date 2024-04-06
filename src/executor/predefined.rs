@@ -175,7 +175,7 @@ pub fn predefined_procs() -> HashMap<String, ProcedureOrVar> {
   add_map!("for", {
     for i in 0..times {
       exec_env.defset_var(&var, &Literal::Int(i));
-      child.execute(exec_env)?;
+      child.execute(exec_env).map_err(|err| err.msg)?;
     }
     Ok(Literal::Void)
   }, exec_env, args; times:int, var:str, child:block);
@@ -190,11 +190,11 @@ pub fn predefined_procs() -> HashMap<String, ProcedureOrVar> {
               return Err(format!("Procedure while: Executed result of arg {} must be boolean.",  res.to_string()));
             }
           },
-          Err(err) => {return Err(err);}
+          Err(err) => {return Err(err.msg);}
         }
       };
       if !cond_res {break;} 
-      child.execute(exec_env)?;
+      child.execute(exec_env).map_err(|err| err.msg)?;
     }
     Ok(Literal::Void)
   }, exec_env, args; cond:block, child:block);
@@ -226,7 +226,7 @@ pub fn predefined_procs() -> HashMap<String, ProcedureOrVar> {
   }, exec_env, args; name: str, block:block);
   add_map!("exec", {
     exec_env.defset_args(&list);
-    block.execute_without_scope(exec_env)
+    block.execute_without_scope(exec_env).map_err(|err| err.msg)
   }, exec_env, args; block:block; list:list);
   add_map!("export", {
     exec_env.export(&name)?;

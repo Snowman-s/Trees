@@ -62,7 +62,9 @@ impl ExecuteEnv {
   }
 
   pub fn new_scope(&mut self) {
-    self.scopes.push(ExecuteScope { namespace: HashMap::new() });
+    self.scopes.push(ExecuteScope {
+      namespace: HashMap::new(),
+    });
   }
   pub fn back_scope(&mut self) {
     if self.scopes.len() <= 1 {
@@ -93,27 +95,14 @@ impl ExecuteEnv {
     }
   }
 
-  pub fn execute_procedure(&mut self, name: &String, args: &Vec<(bool, Box<Block>)>) -> Result<Literal, String> {
-    let mut exec_args = vec![];
-    for (expand, arg) in args {
-      let result = arg.execute(self)?;
-      if *expand {
-        let Literal::List(res_list) = result else {
-          return Err(format!("\"@\" needs the arg is a list literal. (Got {})", result.to_string()));
-        };
-        exec_args.extend(res_list);
-      } else {
-        exec_args.push(result);
-      }
-    }
-
+  pub fn execute_procedure(&mut self, name: &String, exec_args: &Vec<Literal>) -> Result<Literal, String> {
     if let Some(behavior_or_var) = self.find_namespace(name) {
       let behavior_or_var = behavior_or_var.clone();
       match behavior_or_var {
-        ProcedureOrVar::FnProcedure(be) => be(self, &exec_args),
+        ProcedureOrVar::FnProcedure(be) => be(self, exec_args),
         ProcedureOrVar::BlockProcedure(block) => {
-          self.defset_args(&exec_args);
-          block.execute_without_scope(self)
+          self.defset_args(exec_args);
+          block.execute_without_scope(self).map_err(|err| err.msg)
         }
         ProcedureOrVar::Var(var) => Ok(var.clone()),
       }
@@ -204,7 +193,7 @@ impl ExecuteEnv {
 
     // 実行
     self.paths.push(parent);
-    let result = block.execute_without_scope(self)?;
+    let result = block.execute_without_scope(self).map_err(|err| err.msg)?;
     self.paths.pop();
 
     Ok(result)

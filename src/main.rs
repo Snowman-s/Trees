@@ -1,8 +1,10 @@
-use std::{env, fs::File, io::Read, path::PathBuf, rc::Rc};
+use std::{env, error, f32::consts::E, fs::File, io::Read, path::PathBuf, rc::Rc};
 
 use compile::compile;
 use executor::execute;
-use structs::Block;
+use structs::{Block, BlockError, BlockErrorTree};
+
+use crate::structs::BlockResult;
 
 mod compile;
 mod executor;
@@ -14,11 +16,13 @@ fn main() {
 
   let path = Rc::new(env::current_dir().unwrap().join(code_file));
   let block = compile_file(path.to_path_buf()).unwrap();
-  execute(
+  match execute(
     block,
     Box::new(move |name| compile_file(name.iter().fold(path.parent().unwrap().to_path_buf(), |a, b| a.join(b)))),
-  )
-  .unwrap();
+  ) {
+    Ok(_) => {}
+    Err(err) => print_error(err),
+  };
 }
 
 fn compile_file(file_path: PathBuf) -> Result<Block, String> {
@@ -29,11 +33,62 @@ fn compile_file(file_path: PathBuf) -> Result<Block, String> {
   compile(buf.split('\n').map(|t| t.to_owned()).collect())
 }
 
+fn print_error(error: BlockError) {
+  eprintln!("\n\nエラーが発生しました：{}\n◦", error.msg);
+  print_error_rec(error.root, &mut vec![false])
+}
+
+fn print_error_rec(tree: BlockErrorTree, after_exists: &mut Vec<bool>) {
+  // 上位の線を表示
+  for a in after_exists[..after_exists.len() - 1].iter() {
+    if *a {
+      eprint!("│");
+    } else {
+      eprint!(" ");
+    }
+  }
+
+  // 自身の線を表示
+  eprintln!(
+    "{}{} {}",
+    if tree.expand {
+      "@"
+    } else if *after_exists.last().unwrap() {
+      "├"
+    } else {
+      "└"
+    },
+    tree.proc_name,
+    match tree.result {
+      BlockResult::Success(literal) => format!("= {}", literal.to_string()),
+      BlockResult::Error => "<-".to_owned(),
+      BlockResult::Unreached => "".to_owned(),
+    }
+  );
+
+  after_exists.push(true);
+  let last_index = after_exists.len() - 1;
+
+  let child_len = tree.children.len();
+  for (i, child) in tree.children.into_iter().enumerate() {
+    if i == child_len - 1 {
+      after_exists[last_index] = false;
+    }
+    print_error_rec(child, after_exists);
+  }
+
+  after_exists.pop();
+}
+
 #[cfg(test)]
 mod tests {
   use std::{cell::RefCell, rc::Rc};
 
-  use crate::{compile, executor::execute_with_mock, structs::Literal};
+  use crate::{
+    compile,
+    executor::execute_with_mock,
+    structs::{BlockError, Literal},
+  };
 
   #[test]
   fn a_plus_b() {
@@ -55,7 +110,16 @@ mod tests {
       "│  3  │      │  4  │ ".to_owned(),
       "└─────┘      └─────┘ ".to_owned(),
     ])
-    .and_then(|b| execute_with_mock(b, Box::new(|| panic!()), out_stream, cmd_executor, Box::new(|_| panic!())));
+    .and_then(|b| {
+      execute_with_mock(
+        b,
+        Box::new(|| panic!()),
+        out_stream,
+        cmd_executor,
+        Box::new(|_| panic!()),
+      )
+      .map_err(|e: BlockError| e.msg)
+    });
 
     assert_eq!(Ok(Literal::Void), result);
     assert_eq!("7", *out_ref.borrow());
@@ -75,7 +139,16 @@ mod tests {
     });
 
     let code_lines: Vec<String> = code.split('\n').map(|c| c.to_owned()).collect();
-    let result = compile(code_lines).and_then(|b| execute_with_mock(b, Box::new(|| panic!()), out_stream, cmd_executor, Box::new(|_| panic!())));
+    let result = compile(code_lines).and_then(|b| {
+      execute_with_mock(
+        b,
+        Box::new(|| panic!()),
+        out_stream,
+        cmd_executor,
+        Box::new(|_| panic!()),
+      )
+      .map_err(|e: BlockError| e.msg)
+    });
 
     let out = out_ref.borrow().clone();
     let cmd = cmd_log_ref.borrow().clone();

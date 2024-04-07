@@ -21,7 +21,7 @@ fn main() {
     Box::new(move |name| compile_file(name.iter().fold(path.parent().unwrap().to_path_buf(), |a, b| a.join(b)))),
   ) {
     Ok(_) => {}
-    Err(err) => print_error(err),
+    Err(err) => print_error(&err),
   };
 }
 
@@ -33,12 +33,19 @@ fn compile_file(file_path: PathBuf) -> Result<Block, String> {
   compile(buf.split('\n').map(|t| t.to_owned()).collect())
 }
 
-fn print_error(error: BlockError) {
+fn print_error(error: &BlockError) {
   eprintln!("\n\nエラーが発生しました：{}\n◦", error.msg);
-  print_error_rec(error.root, &mut vec![false])
+  print_error_rec(&error.root, &mut vec![false]);
+
+  let mut before_error = error;
+  while let Some(now_error) = &before_error.caused_by {
+    eprintln!("\n\n起因：\n◦");
+    print_error_rec(&now_error.root, &mut vec![false]);
+    before_error = now_error;
+  }
 }
 
-fn print_error_rec(tree: BlockErrorTree, after_exists: &mut Vec<bool>) {
+fn print_error_rec(tree: &BlockErrorTree, after_exists: &mut Vec<bool>) {
   // 上位の線を表示
   for a in after_exists[..after_exists.len() - 1].iter() {
     if *a {
@@ -59,7 +66,7 @@ fn print_error_rec(tree: BlockErrorTree, after_exists: &mut Vec<bool>) {
       "└"
     },
     tree.proc_name,
-    match tree.result {
+    match &tree.result {
       BlockResult::Success(literal) => format!("= {}", literal.to_string()),
       BlockResult::Error => "<-".to_owned(),
       BlockResult::Unreached => "".to_owned(),
@@ -70,7 +77,7 @@ fn print_error_rec(tree: BlockErrorTree, after_exists: &mut Vec<bool>) {
   let last_index = after_exists.len() - 1;
 
   let child_len = tree.children.len();
-  for (i, child) in tree.children.into_iter().enumerate() {
+  for (i, child) in tree.children.iter().enumerate() {
     if i == child_len - 1 {
       after_exists[last_index] = false;
     }

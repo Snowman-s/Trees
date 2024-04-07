@@ -1,4 +1,4 @@
-use super::{literal, ExecuteEnv, Literal};
+use super::{ExecuteEnv, Literal};
 
 #[derive(PartialEq, Eq, Debug, Clone)]
 pub struct Block {
@@ -33,6 +33,7 @@ impl Block {
           if let Literal::List(_) = result {
           } else {
             return Err(self.create_error(
+              None,
               format!("\"@\" needs the arg is a list literal. (Got {})", result.to_string()),
               pure_exec_args,
             ));
@@ -54,7 +55,13 @@ impl Block {
           }
         })
         .collect();
-      exec_env.execute_procedure(&self.proc_name, &expanded_args).map_err(|msg| self.create_error(msg, pure_exec_args))
+      exec_env.execute_procedure(&self.proc_name, &expanded_args).map_err(|proc_error| match proc_error {
+        super::ProcedureError::CausedByBlockExec(block_error) => {
+          let new_msg = block_error.msg.clone();
+          self.create_error(Some(block_error), new_msg, pure_exec_args)
+        }
+        super::ProcedureError::OtherError(msg) => self.create_error(None, msg, pure_exec_args),
+      })
     }
   }
 
@@ -91,11 +98,12 @@ impl Block {
         expand: false,
         proc_name: self.proc_name.clone(),
       },
+      caused_by: err.caused_by,
       msg: err.msg,
     }
   }
 
-  fn create_error(&self, msg: String, pure_exec_args: Vec<Literal>) -> BlockError {
+  fn create_error(&self, caused_by: Option<Box<BlockError>>, msg: String, pure_exec_args: Vec<Literal>) -> BlockError {
     let mut children = vec![];
     for (i, (expand, block)) in self.args.iter().cloned().enumerate() {
       let proc_name = block.proc_name;
@@ -116,6 +124,7 @@ impl Block {
         expand: false,
         proc_name: self.proc_name.clone(),
       },
+      caused_by,
       msg,
     }
   }
@@ -139,5 +148,6 @@ pub struct BlockErrorTree {
 #[derive(Debug)]
 pub struct BlockError {
   pub root: BlockErrorTree,
+  pub caused_by: Option<Box<BlockError>>,
   pub msg: String,
 }

@@ -1,8 +1,8 @@
-use super::{Block, Literal};
+use super::{Block, BlockError, Literal};
 use regex::Regex;
 use std::{collections::HashMap, sync::OnceLock};
 
-pub type FnProcedure = fn(&mut ExecuteEnv, &Vec<Literal>) -> Result<Literal, String>;
+pub type FnProcedure = fn(&mut ExecuteEnv, &Vec<Literal>) -> Result<Literal, ProcedureError>;
 
 #[derive(Clone)]
 pub enum ProcedureOrVar {
@@ -95,14 +95,14 @@ impl ExecuteEnv {
     }
   }
 
-  pub fn execute_procedure(&mut self, name: &String, exec_args: &Vec<Literal>) -> Result<Literal, String> {
+  pub fn execute_procedure(&mut self, name: &String, exec_args: &Vec<Literal>) -> Result<Literal, ProcedureError> {
     if let Some(behavior_or_var) = self.find_namespace(name) {
       let behavior_or_var = behavior_or_var.clone();
       match behavior_or_var {
         ProcedureOrVar::FnProcedure(be) => be(self, exec_args),
         ProcedureOrVar::BlockProcedure(block) => {
           self.defset_args(exec_args);
-          block.execute_without_scope(self).map_err(|err| err.msg)
+          block.execute_without_scope(self).map_err(|err| ProcedureError::CausedByBlockExec(Box::new(err)))
         }
         ProcedureOrVar::Var(var) => Ok(var.clone()),
       }
@@ -115,15 +115,15 @@ impl ExecuteEnv {
     } else if name.is_empty() {
       Ok(Literal::Void)
     } else {
-      Err(format!("Undefined Proc Name {}", name))
+      Err(ProcedureError::OtherError(format!("Undefined Proc Name {}", name)))
     }
   }
 
-  pub fn get_var(&mut self, name: &String) -> Result<Literal, String> {
+  pub fn get_var(&mut self, name: &String) -> Result<Literal, ProcedureError> {
     if let Some(ProcedureOrVar::Var(value)) = self.find_namespace_mut(name) {
       Ok(value.clone())
     } else {
-      Err(format!("Variable {} is not defined", name))
+      Err(ProcedureError::OtherError(format!("Variable {} is not defined", name)))
     }
   }
 
@@ -177,7 +177,7 @@ impl ExecuteEnv {
     (self.cmd_executor)(cmd, args)
   }
 
-  pub fn include(&mut self, path_str: String) -> Result<Literal, String> {
+  pub fn include(&mut self, path_str: String) -> Result<Literal, ProcedureError> {
     // 祖先抽出
     let parent = if let Some(index) = path_str.find('/') {
       let truncated = &path_str[..index];
@@ -189,13 +189,31 @@ impl ExecuteEnv {
     // コンパイル
     let mut paths = self.paths.clone();
     paths.push(path_str);
-    let block = (self.includer)(&paths)?;
+    let block = (self.includer)(&paths).map_err(ProcedureError::OtherError)?;
 
     // 実行
     self.paths.push(parent);
-    let result = block.execute_without_scope(self).map_err(|err| err.msg)?;
+    let result = block.execute_without_scope(self).map_err(|err| ProcedureError::CausedByBlockExec(Box::new(err)))?;
     self.paths.pop();
 
     Ok(result)
+  }
+}
+
+#[derive(Debug)]
+pub enum ProcedureError {
+  CausedByBlockExec(Box<BlockError>),
+  OtherError(String),
+}
+
+impl From<String> for ProcedureError {
+  fn from(value: String) -> Self {
+    ProcedureError::OtherError(value)
+  }
+}
+
+impl From<BlockError> for ProcedureError {
+  fn from(value: BlockError) -> Self {
+    ProcedureError::CausedByBlockExec(Box::new(value))
   }
 }

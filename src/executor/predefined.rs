@@ -2,94 +2,99 @@ use std::collections::HashMap;
 
 use crate::structs::{Literal, ProcedureError, ProcedureOrVar};
 
+fn type_error_msg(proc_name: &str, index: usize, actually: &Literal, expected: &str) -> String {
+  format!(
+    "Procedure {}: $arg[{}] must be {}. (Got {})",
+    proc_name,
+    index,
+    expected,
+    actually.to_string()
+  )
+}
+
+#[allow(unused_variables, unused_mut)]
 pub fn predefined_procs() -> HashMap<String, ProcedureOrVar> {
   let mut map: HashMap<String, ProcedureOrVar> = HashMap::new();
 
   macro_rules! add_map {
-    ($name:expr, $callback:block; ) => {{
-      map.insert($name.to_string(), ProcedureOrVar::FnProcedure(|_exec_env, _args| {
-        $callback
-      }))
-    }};
-    ($name:expr, $callback:block; $($tail:ident:$type:tt),+ ) => {{
+    ($name:expr, $callback:block; $($tail:ident:$type:tt),* ) => {{
       map.insert($name.to_string(), ProcedureOrVar::FnProcedure(|_exec_env, args| {
-        initialize_vars!($name, _exec_env, args, $($tail:$type),*);
+        initialize_vars!($name, args, $($tail:$type),*);
         $callback
       }))
     }};
     ($name:expr, $callback:block, $exec_env:ident, $args:ident; $($tail:ident:$type:tt),* ) => {{
       map.insert($name.to_string(), ProcedureOrVar::FnProcedure(|$exec_env, $args| {
-        initialize_vars!($name, $exec_env, $args, $($tail:$type),*);
+        initialize_vars!($name, $args, $($tail:$type),*);
         $callback
       }))
     }};
     ($name:expr, $callback:block, $exec_env:ident, $args:ident; $($tail:ident:$type:tt),*; $list:ident:list ) => {{
       map.insert($name.to_string(), ProcedureOrVar::FnProcedure(|$exec_env, $args| {
-        initialize_vars!($name, $exec_env, $args, $($tail:$type),*; $list:list);
+        initialize_vars!($name, $args, $($tail:$type),*; $list:list);
         $callback
       }))
     }};
   }
 
   macro_rules! initialize_vars {
-    ($name: expr, $env:expr, $vec:expr,) => {};
-    ($name: expr, $env:expr, $vec:expr, $($tail:ident:$type:tt),+) => {
+    ($name: expr, $vec:expr, $($tail:ident:$type:tt),*) => {
       if $vec.len() != count_idents!($($tail)*) {
-        return Err(format!("Procesure {}: Length of args must be {}. (Got {})", $name, count_idents!($($tail)*), $vec.len()).into());
+        return Err(format!("Procedure {}: Length of args must be {}. (Got {})", $name, count_idents!($($tail)*), $vec.len()).into());
       }
-      let mut iter = $vec.into_iter();
+      let mut iter = $vec.into_iter().enumerate();
       $(
-        let next = match iter.next() {
+        let (index, next) = match iter.next() {
           Some(val) => val,
           None => panic!(),
         };
-        declare!($name, $env, next, $tail:$type);
+        declare!(index, $name, next, $tail:$type);
       )*
     };
-    ($name: expr, $env:expr, $vec:expr, $($tail:ident:$type:tt),*; $list:ident:list) => {
-      let mut iter = $vec.into_iter();
+    ($name: expr, $vec:expr, $($tail:ident:$type:tt),*; $list:ident:list) => {
+      let mut iter = $vec.into_iter().enumerate();
       $(
-        let next = match iter.next() {
+        let (index, next) = match iter.next() {
           Some(val) => val,
           None => panic!(),
         };
-        declare!($name, $env, next, $tail:$type);
+        declare!(index, $name, next, $tail:$type);
       )*
-      let $list: Vec<Literal> = iter.map(|c|c.clone()).collect();
+      let $list: Vec<Literal> = iter.map(|(_index, lit)|lit).cloned().collect();
     }
   }
 
   macro_rules! declare {
-    ($name: expr, $env:expr, $block:expr, $tail:ident:any) => {
-      let $tail = $block.clone();
+    ($index: expr, $name: expr, $literal:expr, $tail:ident:any) => {
+      let $tail = $literal.clone();
     };
-    ($name: expr, $env:expr, $block:expr, $tail:ident:int) => {
-      let Literal::Int($tail) = $block else {
-        return Err(format!("Procesure {}: Executed result of arg {} must be int.", $name, $block.to_string()).into());
+    ($index: expr, $name: expr, $literal:expr, $tail:ident:int) => {
+      let Literal::Int($tail) = $literal else {
+        return Err(type_error_msg($name, $index, $literal, "int").into());
       };
       let $tail = $tail.clone();
     };
-    ($name: expr, $env:expr, $block:expr, $tail:ident:str) => {
-      let Literal::String($tail) = $block else {
-        return Err(format!("Procesure {}: Executed result of arg {} must be str.", $name, $block.to_string()).into());
+    ($index: expr, $name: expr, $literal:expr, $tail:ident:str) => {
+      let Literal::String($tail) = $literal else {
+        return Err(type_error_msg($name, $index, $literal, "str").into());
       };
       let $tail = $tail.clone();
     };
-    ($name: expr, $env:expr, $block:expr, $tail:ident:boolean) => {
-      let Literal::Boolean($tail) = $block else {
-        return Err(format!("Procedure {}: Executed result of arg {} must be boolean.", $name, $block.to_string()).into());
+    ($index: expr, $name: expr, $literal:expr, $tail:ident:boolean) => {
+      let Literal::Boolean($tail) = $literal else {
+        return Err(type_error_msg($name, $index, $literal, "boolean").into());
       };
       let $tail = $tail.clone();
     };
-    ($name: expr, $env:expr, $block:expr, $tail:ident:block) => {
-      let Literal::Block($tail) = $block else {
-        return Err(format!("Procesure {}: Executed result of arg {} must be block.", $name, $block.to_string()).into());
+    ($index: expr, $name: expr, $literal:expr, $tail:ident:block) => {
+      let Literal::Block($tail) = $literal else {
+        return Err(type_error_msg($name, $index, $literal, "block").into());
       };
       let $tail = $tail.clone();
     };
-    ($name: expr, $env:expr, $block:expr, $tail:ident:list) => {
-      let Literal::List($tail) = $block else {
-        return Err(format!("Procesure {}: Executed result of arg {} must be list.", $name, $block.to_string()).into());
+    ($index: expr, $name: expr, $literal:expr, $tail:ident:list) => {
+      let Literal::List($tail) = $literal else {
+        return Err(type_error_msg($name, $index, $literal, "list").into());
       };
       let $tail = $tail.clone();
     };

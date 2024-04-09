@@ -276,21 +276,21 @@ mod tests {
 
   #[test]
   fn bool_and() {
-    let result = execute(*b!("AND", vec![b!("true"), b!("true")]));
+    let result = execute(*b!("and", vec![b!("true"), b!("true")]));
 
     assert_eq!(result, Ok(Literal::Boolean(true)))
   }
 
   #[test]
   fn bool_or() {
-    let result = execute(*b!("OR", vec![b!("true"), b!("false")]));
+    let result = execute(*b!("or", vec![b!("true"), b!("false")]));
 
     assert_eq!(result, Ok(Literal::Boolean(true)))
   }
 
   #[test]
   fn bool_xor() {
-    let result = execute(*b!("XOR", vec![b!("true"), b!("false")]));
+    let result = execute(*b!("xor", vec![b!("true"), b!("false")]));
 
     assert_eq!(result, Ok(Literal::Boolean(true)))
   }

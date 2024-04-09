@@ -106,9 +106,9 @@ pub fn predefined_procs() -> HashMap<String, ProcedureOrVar> {
   add_map!("/", {Ok(Literal::Int(a / b))}; a:int, b:int);
   add_map!("%", {Ok(Literal::Int(a % b))}; a:int, b:int);
   add_map!("=", {Ok(Literal::Boolean(a == b))}; a:any, b:any);
-  add_map!("AND", {Ok(Literal::Boolean(a & b))}; a:boolean, b:boolean);
-  add_map!("OR", {Ok(Literal::Boolean(a | b))}; a:boolean, b:boolean);
-  add_map!("XOR", {Ok(Literal::Boolean(a ^ b))}; a:boolean, b:boolean);
+  add_map!("and", {Ok(Literal::Boolean(a & b))}; a:boolean, b:boolean);
+  add_map!("or", {Ok(Literal::Boolean(a | b))}; a:boolean, b:boolean);
+  add_map!("xor", {Ok(Literal::Boolean(a ^ b))}; a:boolean, b:boolean);
   add_map!("<", {Ok(Literal::Boolean(a < b))}; a:int, b:int);
   add_map!(">", {Ok(Literal::Boolean(a > b))}; a:int, b:int);
   add_map!("<=", {Ok(Literal::Boolean(a <= b))}; a:int, b:int);

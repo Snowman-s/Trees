@@ -12,6 +12,33 @@ fn type_error_msg(proc_name: &str, index: usize, actually: &Literal, expected: &
   )
 }
 
+fn block_type_error_msg(proc_name: &str, index: usize, actually: &Literal, expected: &str) -> String {
+  format!(
+    "Procedure {}: Executed result of $arg[{}] must be {}. (Got {})",
+    proc_name,
+    index,
+    expected,
+    actually.to_string()
+  )
+}
+
+fn list_type_error_msg(
+  proc_name: &str,
+  arg_index: usize,
+  list_index: usize,
+  actually: &Literal,
+  expected: &str,
+) -> String {
+  format!(
+    "Procedure {}: [{}] of $arg[{}] must be {}. (Got {})",
+    proc_name,
+    list_index,
+    arg_index,
+    expected,
+    actually.to_string()
+  )
+}
+
 #[allow(unused_variables, unused_mut)]
 pub fn predefined_procs() -> HashMap<String, ProcedureOrVar> {
   let mut map: HashMap<String, ProcedureOrVar> = HashMap::new();
@@ -150,11 +177,11 @@ pub fn predefined_procs() -> HashMap<String, ProcedureOrVar> {
   }; string:str);
   add_map!("bytes to str", {
     let mut data = vec![];
-    for byte in bytes {
+    for (index, byte) in bytes.iter().enumerate() {
       if let Literal::Int(b) = byte {
         data.push(u8::try_from(b.to_owned()).map_err(|e| e.to_string())?); 
       } else {
-        return Err(format!("Procesure {}: Executed result of arg {} must be int.", "bytes to str", byte.to_string()).into());
+        return Err(list_type_error_msg("bytes to str", index, 0, byte, "int").into());
       }
     }
     Ok(Literal::String(String::from_utf8_lossy(&data).to_string()))
@@ -168,7 +195,7 @@ pub fn predefined_procs() -> HashMap<String, ProcedureOrVar> {
   }, _exec_env, args;;list:list);
   add_map!("[]", {
     let index_usize:usize = usize::try_from( index).map_err(|e|e.to_string())?;
-    list.get(index_usize).cloned().ok_or("Index out of range".to_string().into())
+    list.get(index_usize).cloned().ok_or(format!("Index ({}) out of range. (Length = {})", index, list.len()).into())
   };list:list, index:int);
   add_map!("len", {
     Ok(Literal::Int(i64::try_from(list.len()).map_err(|err|err.to_string())?))
@@ -192,7 +219,7 @@ pub fn predefined_procs() -> HashMap<String, ProcedureOrVar> {
             if let Literal::Boolean(res_bool) = res {
               res_bool
             } else {
-              return Err(format!("Procedure while: Executed result of arg {} must be boolean.",  res.to_string()).into());
+              return Err(block_type_error_msg("while", 0, &res, "boolean").into());
             }
           },
           Err(err) => {return Err(err.into());}
@@ -240,11 +267,11 @@ pub fn predefined_procs() -> HashMap<String, ProcedureOrVar> {
 
   add_map!("cmd", {
     let mut args = vec![];
-    for l in list {
+    for (index, l) in list.iter().enumerate() {
       if let Literal::String(s) = l {
         args.push( s.to_owned()); 
       } else {
-        return Err(format!("Procesure {}: Executed result of arg {} must be str.", "cmd", l.to_string()).into());
+        return Err(list_type_error_msg("cmd", index, 1, l, "str").into());
       }
     }
     exec_env.cmd(cmd, args).map(Literal::String).map_err(|err|err.into())

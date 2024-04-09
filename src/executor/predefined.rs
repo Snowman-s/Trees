@@ -60,36 +60,36 @@ pub fn predefined_procs() -> HashMap<String, ProcedureOrVar> {
   }
 
   macro_rules! declare {
-    ($name: expr, $env:expr, $block:expr, $tail:ident:any) => {
-      let $tail = $block.clone();
+    ($name: expr, $env:expr, $literal:expr, $tail:ident:any) => {
+      let $tail = $literal.clone();
     };
-    ($name: expr, $env:expr, $block:expr, $tail:ident:int) => {
-      let Literal::Int($tail) = $block else {
-        return Err(format!("Procesure {}: Executed result of arg {} must be int.", $name, $block.to_string()).into());
+    ($name: expr, $env:expr, $literal:expr, $tail:ident:int) => {
+      let Literal::Int($tail) = $literal else {
+        return Err(format!("Procesure {}: Executed result of arg {} must be int.", $name, $literal.to_string()).into());
       };
       let $tail = $tail.clone();
     };
-    ($name: expr, $env:expr, $block:expr, $tail:ident:str) => {
-      let Literal::String($tail) = $block else {
-        return Err(format!("Procesure {}: Executed result of arg {} must be str.", $name, $block.to_string()).into());
+    ($name: expr, $env:expr, $literal:expr, $tail:ident:str) => {
+      let Literal::String($tail) = $literal else {
+        return Err(format!("Procesure {}: Executed result of arg {} must be str.", $name, $literal.to_string()).into());
       };
       let $tail = $tail.clone();
     };
-    ($name: expr, $env:expr, $block:expr, $tail:ident:boolean) => {
-      let Literal::Boolean($tail) = $block else {
-        return Err(format!("Procedure {}: Executed result of arg {} must be boolean.", $name, $block.to_string()).into());
+    ($name: expr, $env:expr, $literal:expr, $tail:ident:boolean) => {
+      let Literal::Boolean($tail) = $literal else {
+        return Err(format!("Procedure {}: Executed result of arg {} must be boolean.", $name, $literal.to_string()).into());
       };
       let $tail = $tail.clone();
     };
-    ($name: expr, $env:expr, $block:expr, $tail:ident:block) => {
-      let Literal::Block($tail) = $block else {
-        return Err(format!("Procesure {}: Executed result of arg {} must be block.", $name, $block.to_string()).into());
+    ($name: expr, $env:expr, $literal:expr, $tail:ident:block) => {
+      let Literal::Block($tail) = $literal else {
+        return Err(format!("Procesure {}: Executed result of arg {} must be block.", $name, $literal.to_string()).into());
       };
       let $tail = $tail.clone();
     };
-    ($name: expr, $env:expr, $block:expr, $tail:ident:list) => {
-      let Literal::List($tail) = $block else {
-        return Err(format!("Procesure {}: Executed result of arg {} must be list.", $name, $block.to_string()).into());
+    ($name: expr, $env:expr, $literal:expr, $tail:ident:list) => {
+      let Literal::List($tail) = $literal else {
+        return Err(format!("Procesure {}: Executed result of arg {} must be list.", $name, $literal.to_string()).into());
       };
       let $tail = $tail.clone();
     };

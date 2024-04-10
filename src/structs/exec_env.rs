@@ -1,6 +1,6 @@
 use super::{Block, BlockError, Literal};
 use regex::Regex;
-use std::{collections::HashMap, sync::OnceLock};
+use std::{borrow::Borrow, collections::HashMap, sync::OnceLock};
 
 pub type FnProcedure = fn(&mut ExecuteEnv, &Vec<Literal>) -> Result<Literal, ProcedureError>;
 
@@ -162,6 +162,16 @@ impl ExecuteEnv {
       Ok(())
     } else {
       Err(format!("Variable {} is not defined", name))
+    }
+  }
+
+  pub fn reexport(&mut self) {
+    let scope_len = self.scopes.len();
+    let high = scope_len - 2;
+    let high2 = scope_len - 3;
+    for (key, proc_or_var) in self.scopes.last().unwrap().namespace.clone().iter() {
+      self.scopes[high].namespace.insert(key.clone(), proc_or_var.clone());
+      self.scopes[high2].namespace.insert(key.clone(), proc_or_var.clone());
     }
   }
 

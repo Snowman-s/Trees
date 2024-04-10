@@ -251,6 +251,13 @@ mod tests {
     }
 
     #[test]
+    fn reexport() {
+      let (r, o, _) = exec_file(include_str!("test/modules/reexport.tr"));
+      assert_eq!(r, Ok(Literal::Void));
+      assert_eq!(o, "12");
+    }
+
+    #[test]
     fn tereport_var() {
       let (r, o, _) = exec_file(include_str!("test/modules/tereport_var.tr"));
       assert_eq!(r, Ok(Literal::Void));

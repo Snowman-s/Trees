@@ -265,12 +265,10 @@ pub fn predefined_procs() -> HashMap<String, ProcedureOrVar> {
     Ok(Literal::Void)
   }, exec_env, args; name:str );
   add_map!("reexport", {
-    let result = child.execute(exec_env)?;
-
     exec_env.reexport();
 
-    Ok(result)
-  }, exec_env, args; child: block);
+    Ok(child)
+  }, exec_env, args; child: any);
 
   add_map!("cmd", {
     let mut args = vec![];

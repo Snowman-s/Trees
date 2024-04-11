@@ -1,6 +1,6 @@
 use super::{Block, BlockError, Literal};
 use regex::Regex;
-use std::{borrow::Borrow, collections::HashMap, sync::OnceLock};
+use std::{collections::HashMap, sync::OnceLock};
 
 pub type FnProcedure = fn(&mut ExecuteEnv, &Vec<Literal>) -> Result<Literal, ProcedureError>;
 

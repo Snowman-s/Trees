@@ -1,4 +1,4 @@
-use std::{env, error, f32::consts::E, fs::File, io::Read, path::PathBuf, rc::Rc};
+use std::{env, fs::File, io::Read, path::PathBuf, rc::Rc};
 
 use compile::compile;
 use executor::execute;
@@ -195,6 +195,13 @@ mod tests {
     let (r, o, _) = exec_file(include_str!("test/substance.tr"));
     assert_eq!(r, Ok(Literal::Void));
     assert_eq!(o, "6");
+  }
+
+  #[test]
+  fn bind_var() {
+    let (r, o, _) = exec_file(include_str!("test/bind_var.tr"));
+    assert_eq!(r, Ok(Literal::Void));
+    assert_eq!(o, "42");
   }
 
   #[test]

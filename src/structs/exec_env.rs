@@ -1,20 +1,22 @@
-use super::{Block, BlockError, Literal};
+use super::{literal::BlockLiteral, Block, BlockError, Literal};
 use regex::Regex;
-use std::{collections::HashMap, sync::OnceLock};
+use std::{cell::RefCell, collections::HashMap, rc::Rc, sync::OnceLock};
 
 pub type FnProcedure = fn(&mut ExecuteEnv, &Vec<Literal>) -> Result<Literal, ProcedureError>;
 
-#[derive(Clone)]
+#[derive(PartialEq, Eq, Debug, Clone)]
 pub enum ProcedureOrVar {
   FnProcedure(FnProcedure),
-  BlockProcedure(Block),
+  BlockProcedure(BlockLiteral),
   Var(Literal),
 }
 
-#[derive(Clone)]
-struct ExecuteScope {
+#[derive(PartialEq, Eq, Debug, Clone)]
+pub struct ExecuteScopeBody {
   namespace: HashMap<String, ProcedureOrVar>,
 }
+
+pub type ExecuteScope = Rc<RefCell<ExecuteScopeBody>>;
 
 pub type Includer = Box<dyn FnMut(&Vec<String>) -> Result<Block, String>>;
 pub struct ExecuteEnv {
@@ -52,7 +54,7 @@ impl ExecuteEnv {
     includer: Includer,
   ) -> ExecuteEnv {
     ExecuteEnv {
-      scopes: vec![ExecuteScope { namespace }],
+      scopes: vec![Rc::new(RefCell::new(ExecuteScopeBody { namespace }))],
       paths: vec![],
       input_stream,
       out_stream,
@@ -62,9 +64,9 @@ impl ExecuteEnv {
   }
 
   pub fn new_scope(&mut self) {
-    self.scopes.push(ExecuteScope {
+    self.scopes.push(Rc::new(RefCell::new(ExecuteScopeBody {
       namespace: HashMap::new(),
-    });
+    })));
   }
   pub fn back_scope(&mut self) {
     if self.scopes.len() <= 1 {
@@ -73,54 +75,77 @@ impl ExecuteEnv {
     self.scopes.pop();
   }
 
-  fn find_scope(&self, name: &String) -> Option<&ExecuteScope> {
-    self.scopes.iter().rev().find(|scope| scope.namespace.contains_key(name))
-  }
-  fn find_scope_mut(&mut self, name: &String) -> Option<&mut ExecuteScope> {
-    self.scopes.iter_mut().rev().find(|scope| scope.namespace.contains_key(name))
+  fn find_scope(&self, name: &str) -> Option<ExecuteScope> {
+    self.scopes.iter().rev().find(|scope| scope.borrow().namespace.contains_key(name)).cloned()
   }
 
-  fn find_namespace(&self, name: &String) -> Option<&ProcedureOrVar> {
-    self.find_scope(name).and_then(|c| c.namespace.get(name))
-  }
-  fn find_namespace_mut(&mut self, name: &String) -> Option<&mut ProcedureOrVar> {
-    self.find_scope_mut(name).and_then(|c| c.namespace.get_mut(name))
+  fn find_namespace(&self, name: &str) -> Option<ProcedureOrVar> {
+    self.scopes.iter().rev().find_map(|scope| scope.borrow().namespace.get(name).cloned())
   }
 
   pub fn defset_args(&mut self, args: &Vec<Literal>) {
-    let namespace = &mut self.scopes.last_mut().unwrap().namespace;
+    let namespace = &mut self.scopes.last().unwrap().borrow_mut().namespace;
     namespace.insert("$args".to_string(), ProcedureOrVar::Var(Literal::List(args.clone())));
     for (i, arg) in args.iter().enumerate() {
       namespace.insert(format!("${}", i), ProcedureOrVar::Var(arg.clone()));
     }
   }
 
-  pub fn execute_procedure(&mut self, name: &String, exec_args: &Vec<Literal>) -> Result<Literal, ProcedureError> {
-    if let Some(behavior_or_var) = self.find_namespace(name) {
-      let behavior_or_var = behavior_or_var.clone();
-      match behavior_or_var {
-        ProcedureOrVar::FnProcedure(be) => be(self, exec_args),
-        ProcedureOrVar::BlockProcedure(block) => {
-          self.defset_args(exec_args);
-          block.execute_without_scope(self).map_err(|err| ProcedureError::CausedByBlockExec(Box::new(err)))
-        }
-        ProcedureOrVar::Var(var) => Ok(var.clone()),
-      }
-    } else if name.starts_with('\"') && name.ends_with('\"') {
-      Ok(Literal::String(name[1..(name.len() - 1)].to_string()))
-    } else if let Some(int) = to_int(name) {
-      Ok(Literal::Int(int))
-    } else if let Some(boolean) = to_bool(name) {
-      Ok(Literal::Boolean(boolean))
-    } else if name.is_empty() {
-      Ok(Literal::Void)
+  pub fn bind_name(&self, name: &str) -> Option<ProcBind> {
+    if let Some(scope) = self.find_scope(name) {
+      Some(ProcBind::Namespace(scope))
     } else {
-      Err(ProcedureError::OtherError(format!("Undefined Proc Name {}", name)))
+      Some(ProcBind::Literal(if name.starts_with('\"') && name.ends_with('\"') {
+        Literal::String(name[1..(name.len() - 1)].to_string())
+      } else if let Some(int) = to_int(name) {
+        Literal::Int(int)
+      } else if let Some(boolean) = to_bool(name) {
+        Literal::Boolean(boolean)
+      } else if name.is_empty() {
+        Literal::Void
+      } else {
+        return None;
+      }))
+    }
+  }
+
+  pub fn execute_procedure(&mut self, name: &str, exec_args: &Vec<Literal>) -> Result<Literal, ProcedureError> {
+    self.execute_procedure_with_bind(
+      name,
+      exec_args,
+      self.bind_name(name).ok_or(format!("Undefined Proc Name {}", name))?,
+    )
+  }
+
+  pub fn execute_procedure_with_bind(
+    &mut self,
+    name: &str,
+    exec_args: &Vec<Literal>,
+    bind: ProcBind,
+  ) -> Result<Literal, ProcedureError> {
+    match bind {
+      ProcBind::Namespace(namespace) => {
+        if let Some(behavior_or_var) = namespace.borrow().namespace.get(name) {
+          let behavior_or_var = behavior_or_var.clone();
+          match behavior_or_var {
+            ProcedureOrVar::FnProcedure(be) => be(self, exec_args),
+            ProcedureOrVar::BlockProcedure(block) => {
+              self.defset_args(exec_args);
+              block.execute_without_scope(self).map_err(|err| ProcedureError::CausedByBlockExec(Box::new(err)))
+            }
+            ProcedureOrVar::Var(var) => Ok(var.clone()),
+          }
+        } else {
+          // 変数が削除できない限り到達不可
+          unreachable!()
+        }
+      }
+      ProcBind::Literal(literal) => Ok(literal),
     }
   }
 
   pub fn get_var(&mut self, name: &String) -> Result<Literal, ProcedureError> {
-    if let Some(ProcedureOrVar::Var(value)) = self.find_namespace_mut(name) {
+    if let Some(ProcedureOrVar::Var(value)) = self.find_namespace(name) {
       Ok(value.clone())
     } else {
       Err(ProcedureError::OtherError(format!("Variable {} is not defined", name)))
@@ -129,26 +154,26 @@ impl ExecuteEnv {
 
   pub fn defset_var(&mut self, name: &str, value: &Literal) {
     let target = self.scopes.len() - 2;
-    self.scopes[target].namespace.insert(name.to_string(), ProcedureOrVar::Var(value.clone()));
+    self.scopes[target].borrow_mut().namespace.insert(name.to_string(), ProcedureOrVar::Var(value.clone()));
   }
 
   pub fn set_var(&mut self, name: &String, value: &Literal) -> Result<(), String> {
-    if let Some(scope) = self.find_scope_mut(name) {
-      scope.namespace.insert(name.to_string(), ProcedureOrVar::Var(value.clone()));
+    if let Some(scope) = self.find_scope(name) {
+      scope.borrow_mut().namespace.insert(name.to_string(), ProcedureOrVar::Var(value.clone()));
       Ok(())
     } else {
       Err(format!("Variable {} is not defined", name))
     }
   }
 
-  pub fn def_proc(&mut self, name: &String, block: &Block) {
+  pub fn def_proc(&mut self, name: &String, block: &BlockLiteral) {
     let behavior = ProcedureOrVar::BlockProcedure(block.clone());
 
-    if let Some(scope) = self.find_scope_mut(name) {
-      scope.namespace.insert(name.to_string(), behavior);
+    if let Some(scope) = self.find_scope(name) {
+      scope.borrow_mut().namespace.insert(name.to_string(), behavior);
     } else {
       let target = self.scopes.len() - 2;
-      self.scopes[target].namespace.insert(name.to_string(), behavior);
+      self.scopes[target].borrow_mut().namespace.insert(name.to_string(), behavior);
     };
   }
 
@@ -157,7 +182,7 @@ impl ExecuteEnv {
       let value = value.clone();
       let cont_index = self.scopes.len() - 3;
       if let Some(context) = self.scopes.get_mut(cont_index) {
-        context.namespace.insert(name.clone(), value.clone());
+        context.borrow_mut().namespace.insert(name.clone(), value.clone());
       };
       Ok(())
     } else {
@@ -169,9 +194,9 @@ impl ExecuteEnv {
     let scope_len = self.scopes.len();
     let high = scope_len - 2;
     let high2 = scope_len - 3;
-    for (key, proc_or_var) in self.scopes.last().unwrap().namespace.clone().iter() {
-      self.scopes[high].namespace.insert(key.clone(), proc_or_var.clone());
-      self.scopes[high2].namespace.insert(key.clone(), proc_or_var.clone());
+    for (key, proc_or_var) in self.scopes.last().unwrap().borrow().namespace.clone().iter() {
+      self.scopes[high].borrow_mut().namespace.insert(key.clone(), proc_or_var.clone());
+      self.scopes[high2].borrow_mut().namespace.insert(key.clone(), proc_or_var.clone());
     }
   }
 
@@ -208,6 +233,34 @@ impl ExecuteEnv {
 
     Ok(result)
   }
+
+  pub fn block_to_literal(&mut self, block: Block) -> Result<BlockLiteral, String> {
+    let proc_name = block.proc_name.clone();
+
+    let bind = if proc_name.starts_with('$') {
+      None
+    } else {
+      self.bind_name(&proc_name).map(Box::new)
+    };
+
+    let mut literal_args = vec![];
+    for (expand, child) in block.args {
+      literal_args.push((expand, Box::new(self.block_to_literal(*child)?)))
+    }
+
+    Ok(BlockLiteral {
+      proc_name: block.proc_name,
+      bind,
+      args: literal_args,
+      quote: block.quote,
+    })
+  }
+}
+
+#[derive(PartialEq, Eq, Debug, Clone)]
+pub enum ProcBind {
+  Namespace(ExecuteScope),
+  Literal(Literal),
 }
 
 #[derive(Debug)]

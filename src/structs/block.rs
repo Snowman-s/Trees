@@ -20,7 +20,9 @@ impl Block {
     if self.quote {
       let mut cloned = self.clone();
       cloned.quote = false;
-      Ok(Literal::Block(cloned))
+      Ok(Literal::Block(
+        exec_env.block_to_literal(cloned).map_err(|msg| self.create_error(None, msg, vec![]))?,
+      ))
     } else {
       let mut pure_exec_args: Vec<Literal> = vec![];
       for (expand, arg) in &self.args {

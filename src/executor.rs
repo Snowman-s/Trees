@@ -47,7 +47,7 @@ pub fn execute_with_mock(
 
 #[cfg(test)]
 mod tests {
-  use crate::structs::{Block, Literal};
+  use crate::structs::{Block, Literal, QuoteStyle};
 
   use super::execute_with_mock;
 
@@ -56,14 +56,14 @@ mod tests {
       Box::new(Block {
         proc_name: $name.to_owned(),
         args: vec![],
-        quote: false,
+        quote: QuoteStyle::None,
       })
     };
     ($name:expr, $args:expr) => {
       Box::new(Block {
         proc_name: $name.to_owned(),
         args: $args.into_iter().map(|a| (false, a)).collect(),
-        quote: false,
+        quote: QuoteStyle::None,
       })
     };
   }
@@ -73,14 +73,14 @@ mod tests {
       Box::new(Block {
         proc_name: $name.to_owned(),
         args: vec![],
-        quote: true,
+        quote: QuoteStyle::Quote,
       })
     };
     ($name:expr, $args:expr) => {
       Box::new(Block {
         proc_name: $name.to_owned(),
         args: $args.into_iter().map(|a| (false, a)).collect(),
-        quote: true,
+        quote: QuoteStyle::Quote,
       })
     };
   }

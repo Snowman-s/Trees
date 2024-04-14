@@ -1,6 +1,6 @@
 use std::cmp::Ordering;
 
-use crate::structs::Block;
+use crate::structs::{Block, QuoteStyle};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct CompilingBlock {
@@ -33,7 +33,7 @@ struct Edge {
 struct BlockPlug {
   x: usize,
   y: usize,
-  quote: bool,
+  quote: QuoteStyle,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -48,8 +48,17 @@ impl CompilingBlock {
   fn to_block(&self, blocks: &Vec<CompilingBlock>) -> Block {
     Block {
       proc_name: self.proc_name.clone(),
-      args: self.args.clone().into_iter().map(|(expand, block_index)| (expand, Box::new(blocks[block_index].to_block(blocks)))).collect(),
-      quote: if let Some(p) = &self.block_plug { p.quote } else { false },
+      args: self
+        .args
+        .clone()
+        .into_iter()
+        .map(|(expand, block_index)| (expand, Box::new(blocks[block_index].to_block(blocks))))
+        .collect(),
+      quote: if let Some(p) = &self.block_plug {
+        p.quote.clone()
+      } else {
+        QuoteStyle::None
+      },
     }
   }
 }
@@ -70,15 +79,25 @@ fn find_a_block(code: &Vec<Vec<String>>, x: usize, y: usize) -> Option<Compiling
   // 右回り
   // 1から始める
   let mut width1 = 1;
-  while char!(width1, 0) == "─" || char!(width1, 0) == "┴" || char!(width1, 0) == "•" {
+  while char!(width1, 0) == "─" || char!(width1, 0) == "┴" || char!(width1, 0) == "•" || char!(width1, 0) == "/" {
     if char!(width1, 0) == "┴" {
       up_plug = Some(BlockPlug {
         x: x + width1,
         y,
-        quote: false,
+        quote: QuoteStyle::None,
       });
     } else if char!(width1, 0) == "•" {
-      up_plug = Some(BlockPlug { x: x + width1, y, quote: true });
+      up_plug = Some(BlockPlug {
+        x: x + width1,
+        y,
+        quote: QuoteStyle::Quote,
+      });
+    } else if char!(width1, 0) == "/" {
+      up_plug = Some(BlockPlug {
+        x: x + width1,
+        y,
+        quote: QuoteStyle::Closure,
+      });
     }
     width1 += 1;
   }
@@ -110,7 +129,10 @@ fn find_a_block(code: &Vec<Vec<String>>, x: usize, y: usize) -> Option<Compiling
   };
 
   let mut under_width1 = 1;
-  while char!(under_width1, height1) == "─" || char!(under_width1, height1) == "┬" || char!(under_width1, height1) == "@" {
+  while char!(under_width1, height1) == "─"
+    || char!(under_width1, height1) == "┬"
+    || char!(under_width1, height1) == "@"
+  {
     if char!(under_width1, height1) == "┬" {
       arg_plugs.push(ArgPlug {
         x: x + under_width1,
@@ -201,48 +223,49 @@ fn find_blocks(code_splited: &Vec<Vec<String>>) -> Vec<CompilingBlock> {
 }
 
 fn find_next_edge(code: &Vec<Vec<String>>, x: &usize, y: &usize, ori: &Orientation) -> Result<Edge, Edge> {
-  let update_and_check = |new_x: usize, new_y: usize, up: &str, left: &str, right: &str, down: &str| -> Result<Edge, Edge> {
-    let t = code
-      .get(new_y)
-      .and_then(|l| l.get(new_x))
-      .ok_or(Edge {
-        x: new_x,
-        y: new_y,
-        ori: ori.clone(),
-      })?
-      .as_str();
-    if t == up {
-      Ok(Edge {
-        x: new_x,
-        y: new_y,
-        ori: Orientation::Up,
-      })
-    } else if t == left {
-      Ok(Edge {
-        x: new_x,
-        y: new_y,
-        ori: Orientation::Left,
-      })
-    } else if t == right {
-      Ok(Edge {
-        x: new_x,
-        y: new_y,
-        ori: Orientation::Right,
-      })
-    } else if t == down {
-      Ok(Edge {
-        x: new_x,
-        y: new_y,
-        ori: Orientation::Down,
-      })
-    } else {
-      Err(Edge {
-        x: new_x,
-        y: new_y,
-        ori: ori.clone(),
-      })
-    }
-  };
+  let update_and_check =
+    |new_x: usize, new_y: usize, up: &str, left: &str, right: &str, down: &str| -> Result<Edge, Edge> {
+      let t = code
+        .get(new_y)
+        .and_then(|l| l.get(new_x))
+        .ok_or(Edge {
+          x: new_x,
+          y: new_y,
+          ori: ori.clone(),
+        })?
+        .as_str();
+      if t == up {
+        Ok(Edge {
+          x: new_x,
+          y: new_y,
+          ori: Orientation::Up,
+        })
+      } else if t == left {
+        Ok(Edge {
+          x: new_x,
+          y: new_y,
+          ori: Orientation::Left,
+        })
+      } else if t == right {
+        Ok(Edge {
+          x: new_x,
+          y: new_y,
+          ori: Orientation::Right,
+        })
+      } else if t == down {
+        Ok(Edge {
+          x: new_x,
+          y: new_y,
+          ori: Orientation::Down,
+        })
+      } else {
+        Err(Edge {
+          x: new_x,
+          y: new_y,
+          ori: ori.clone(),
+        })
+      }
+    };
 
   match ori {
     Orientation::Up => update_and_check(*x, y - 1, "│", "┐", "┌", ""),
@@ -254,7 +277,11 @@ fn find_next_edge(code: &Vec<Vec<String>>, x: &usize, y: &usize, ori: &Orientati
 
 fn connect_blocks(code: &Vec<Vec<String>>, blocks: &Vec<CompilingBlock>) -> Result<Block, String> {
   let mut blocks_clone = blocks.clone();
-  let head_candinates: Vec<usize> = blocks.iter().enumerate().filter_map(|(i, block)| if block.block_plug.is_some() { None } else { Some(i) }).collect();
+  let head_candinates: Vec<usize> = blocks
+    .iter()
+    .enumerate()
+    .filter_map(|(i, block)| if block.block_plug.is_some() { None } else { Some(i) })
+    .collect();
 
   if head_candinates.len() != 1 {
     return Err(format!(
@@ -288,7 +315,13 @@ fn connect_blocks(code: &Vec<Vec<String>>, blocks: &Vec<CompilingBlock>) -> Resu
       let (index, _) = blocks
         .iter()
         .enumerate()
-        .find(|(_, b)| if let Some(p) = &b.block_plug { p.x == mut_x && p.y == mut_y } else { false })
+        .find(|(_, b)| {
+          if let Some(p) = &b.block_plug {
+            p.x == mut_x && p.y == mut_y
+          } else {
+            false
+          }
+        })
         .ok_or(format!("No block-plug found at ({}, {})", mut_x, mut_y))?;
 
       block.args.push((*expand, index));
@@ -299,7 +332,10 @@ fn connect_blocks(code: &Vec<Vec<String>>, blocks: &Vec<CompilingBlock>) -> Resu
 }
 
 fn split_code(code: &Vec<String>) -> Vec<Vec<String>> {
-  code.iter().map(|s| s.split("").filter_map(|s| if s.is_empty() { None } else { Some(s.to_owned()) }).collect()).collect()
+  code
+    .iter()
+    .map(|s| s.split("").filter_map(|s| if s.is_empty() { None } else { Some(s.to_owned()) }).collect())
+    .collect()
 }
 
 pub fn compile(code: Vec<String>) -> Result<Block, String> {
@@ -314,7 +350,7 @@ pub fn compile(code: Vec<String>) -> Result<Block, String> {
 mod tests {
   use crate::{
     compile::{find_blocks, ArgPlug, BlockPlug, CompilingBlock, Orientation},
-    structs::Block,
+    structs::{Block, QuoteStyle},
   };
 
   use super::{compile, split_code};
@@ -341,7 +377,7 @@ mod tests {
       Ok(Block {
         proc_name: "abc".to_owned(),
         args: vec![],
-        quote: false
+        quote: QuoteStyle::None
       }),
       block
     );
@@ -362,7 +398,7 @@ mod tests {
       Ok(Block {
         proc_name: "abc\ndef g".to_owned(),
         args: vec![],
-        quote: false
+        quote: QuoteStyle::None
       }),
       block
     );
@@ -402,7 +438,11 @@ mod tests {
           y: 4,
           width: 8,
           height: 3,
-          block_plug: Some(BlockPlug { x: 8, y: 4, quote: false }),
+          block_plug: Some(BlockPlug {
+            x: 8,
+            y: 4,
+            quote: QuoteStyle::None
+          }),
           arg_plugs: vec![],
           args: vec![]
         }
@@ -431,10 +471,10 @@ mod tests {
           Box::new(Block {
             proc_name: "def".to_owned(),
             args: vec![],
-            quote: false
+            quote: QuoteStyle::None
           })
         )],
-        quote: false
+        quote: QuoteStyle::None
       }),
       block
     );

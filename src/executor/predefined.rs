@@ -207,14 +207,14 @@ pub fn predefined_procs() -> HashMap<String, ProcedureOrVar> {
   add_map!("for", {
     for i in 0..times {
       exec_env.defset_var(&var, &Literal::Int(i));
-      child.execute(exec_env, |_|{})?;
+      child.execute_without_scope(exec_env, |_|{})?;
     }
     Ok(Literal::Void)
   }, exec_env, args; times:int, var:str, child:block);
   add_map!("while", {
     loop {
       let cond_res = {
-        match cond.execute(exec_env, |_|{}) {
+        match cond.execute_without_scope(exec_env, |_|{}) {
           Ok(res) => {
             if let Literal::Boolean(res_bool) = res {
               res_bool
@@ -226,7 +226,7 @@ pub fn predefined_procs() -> HashMap<String, ProcedureOrVar> {
         }
       };
       if !cond_res {break;} 
-      child.execute(exec_env, |_|{})?;
+      child.execute_without_scope(exec_env, |_|{})?;
     }
     Ok(Literal::Void)
   }, exec_env, args; cond:block, child:block);

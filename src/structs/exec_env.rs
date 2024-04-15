@@ -74,6 +74,15 @@ impl ExecuteEnv {
     }
     self.scopes.pop();
   }
+  pub fn reload_scope(&mut self, scope: ExecuteScope) {
+    self.scopes.push(scope);
+  }
+  pub fn freeze_scope(&mut self) -> ExecuteScope {
+    if self.scopes.len() <= 1 {
+      panic!("Scopes were not enough.Please report the problem to developers.")
+    }
+    self.scopes.pop().unwrap()
+  }
 
   pub fn new_scopes(&mut self, scopes: Vec<ExecuteScope>) {
     self.scopes.extend(scopes);
@@ -138,14 +147,9 @@ impl ExecuteEnv {
           let behavior_or_var = behavior_or_var.clone();
           match behavior_or_var {
             ProcedureOrVar::FnProcedure(be) => be(self, exec_args),
-            ProcedureOrVar::BlockProcedure(block) => {
-              self.back_scope();
-              let result = block
-                .execute(self, |exec_env| exec_env.defset_args(exec_args))
-                .map_err(|err| ProcedureError::CausedByBlockExec(Box::new(err)));
-              self.new_scope();
-              result
-            }
+            ProcedureOrVar::BlockProcedure(block) => block
+              .execute_without_scope(self, |exec_env| exec_env.defset_args(exec_args))
+              .map_err(|err| ProcedureError::CausedByBlockExec(Box::new(err))),
             ProcedureOrVar::Var(var) => Ok(var.clone()),
           }
         } else {
@@ -241,9 +245,9 @@ impl ExecuteEnv {
 
     // 実行
     self.paths.push(parent);
-    self.back_scope();
+    let freezed = self.freeze_scope();
     let result = block.execute(self).map_err(|err| ProcedureError::CausedByBlockExec(Box::new(err)))?;
-    self.new_scope();
+    self.reload_scope(freezed);
     self.paths.pop();
 
     Ok(result)

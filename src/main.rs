@@ -231,6 +231,13 @@ mod tests {
   }
 
   #[test]
+  fn bind_var3() {
+    let (r, o, _) = exec_file(include_str!("test/bind_var3.tr"));
+    assert_eq!(r, Ok(Literal::Void));
+    assert_eq!(o, "42");
+  }
+
+  #[test]
   fn generator() {
     let (r, o, _) = exec_file(include_str!("test/generator.tr"));
     assert_eq!(r, Ok(Literal::Void));
@@ -262,6 +269,13 @@ mod tests {
   #[test]
   fn recursion() {
     let (r, o, _) = exec_file(include_str!("test/recursion.tr"));
+    assert_eq!(r, Ok(Literal::Void));
+    assert_eq!(o, "6\n");
+  }
+
+  #[test]
+  fn recursion2() {
+    let (r, o, _) = exec_file(include_str!("test/recursion2.tr"));
     assert_eq!(r, Ok(Literal::Void));
     assert_eq!(o, "6\n");
   }

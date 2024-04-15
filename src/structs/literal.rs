@@ -45,25 +45,6 @@ pub struct BlockLiteral {
 }
 
 impl BlockLiteral {
-  pub fn execute(
-    &self,
-    exec_env: &mut ExecuteEnv,
-    inner_vars: impl FnOnce(&mut ExecuteEnv),
-  ) -> Result<Literal, BlockError> {
-    let BlockLiteral { scopes, block } = self;
-
-    let scopes_len = scopes.len();
-
-    exec_env.new_scopes(scopes.to_vec());
-    exec_env.new_scope();
-    inner_vars(exec_env);
-    let result = block.execute_without_scope(exec_env)?;
-    exec_env.back_scope();
-    exec_env.back_scopes(scopes_len);
-
-    Ok(result)
-  }
-
   pub fn execute_without_scope(
     &self,
     exec_env: &mut ExecuteEnv,
@@ -73,10 +54,15 @@ impl BlockLiteral {
 
     let scopes_len = scopes.len();
 
+    let freezed = exec_env.freeze_scope();
+    exec_env.new_scope();
     exec_env.new_scopes(scopes.to_vec());
+    // $から始まる変数をすべて内部コピーするようにする
     inner_vars(exec_env);
     let result = block.execute_without_scope(exec_env)?;
     exec_env.back_scopes(scopes_len);
+    exec_env.back_scope();
+    exec_env.reload_scope(freezed);
 
     Ok(result)
   }

@@ -13,6 +13,7 @@ pub enum ProcedureOrVar {
 
 #[derive(PartialEq, Eq, Debug, Clone)]
 pub struct ExecuteScopeBody {
+  pub paths: Vec<String>,
   pub namespace: HashMap<String, ProcedureOrVar>,
 }
 
@@ -21,7 +22,6 @@ pub type ExecuteScope = Rc<RefCell<ExecuteScopeBody>>;
 pub type Includer = Box<dyn FnMut(&Vec<String>) -> Result<Block, String>>;
 pub struct ExecuteEnv {
   scopes: Vec<ExecuteScope>,
-  paths: Vec<String>,
   input_stream: Box<dyn FnMut() -> String>,
   out_stream: Box<dyn FnMut(String)>,
   cmd_executor: Box<dyn FnMut(String, Vec<String>) -> Result<String, String>>,
@@ -54,8 +54,10 @@ impl ExecuteEnv {
     includer: Includer,
   ) -> ExecuteEnv {
     ExecuteEnv {
-      scopes: vec![Rc::new(RefCell::new(ExecuteScopeBody { namespace }))],
-      paths: vec![],
+      scopes: vec![Rc::new(RefCell::new(ExecuteScopeBody {
+        paths: vec![],
+        namespace,
+      }))],
       input_stream,
       out_stream,
       cmd_executor,
@@ -64,7 +66,10 @@ impl ExecuteEnv {
   }
 
   pub fn new_scope(&mut self) {
+    let last = self.scopes.last().unwrap().borrow().paths.clone();
+
     self.scopes.push(Rc::new(RefCell::new(ExecuteScopeBody {
+      paths: last,
       namespace: HashMap::new(),
     })));
   }
@@ -234,7 +239,7 @@ impl ExecuteEnv {
 
   pub fn include(&mut self, path_str: String) -> Result<Literal, ProcedureError> {
     // 祖先抽出
-    let parent = if let Some(index) = path_str.find('/') {
+    let parent = if let Some(index) = path_str.rfind('/') {
       let truncated = &path_str[..index];
       truncated.to_string()
     } else {
@@ -242,16 +247,17 @@ impl ExecuteEnv {
     };
 
     // コンパイル
-    let mut paths = self.paths.clone();
+    let mut paths = self.scopes.last().unwrap().borrow().paths.clone();
     paths.push(path_str);
     let block = (self.includer)(&paths).map_err(ProcedureError::OtherError)?;
 
     // 実行
-    self.paths.push(parent);
     let freezed = self.freeze_scope();
-    let result = block.execute(self).map_err(|err| ProcedureError::CausedByBlockExec(Box::new(err)))?;
+    self.new_scope();
+    self.scopes.last().unwrap().borrow_mut().paths.push(parent);
+    let result = block.execute_without_scope(self).map_err(|err| ProcedureError::CausedByBlockExec(Box::new(err)))?;
+    self.back_scope();
     self.reload_scope(freezed);
-    self.paths.pop();
 
     Ok(result)
   }

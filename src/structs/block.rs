@@ -1,10 +1,17 @@
-use super::{ExecuteEnv, Literal};
+use super::{exec_env::ExecuteScope, literal::BlockLiteral, ExecuteEnv, Literal};
 
 #[derive(PartialEq, Eq, Debug, Clone)]
 pub struct Block {
   pub proc_name: String,
   pub args: Vec<(bool, Box<Block>)>,
-  pub quote: bool,
+  pub quote: QuoteStyle,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum QuoteStyle {
+  Quote,
+  Closure,
+  None,
 }
 
 impl Block {
@@ -17,12 +24,23 @@ impl Block {
   }
 
   pub fn execute_without_scope(&self, exec_env: &mut ExecuteEnv) -> Result<Literal, BlockError> {
-    if self.quote {
+    if self.quote != QuoteStyle::None {
+      let quote = self.quote.clone();
+
       let mut cloned = self.clone();
-      cloned.quote = false;
-      Ok(Literal::Block(
-        exec_env.block_to_literal(cloned).map_err(|msg| self.create_error(None, msg, vec![]))?,
-      ))
+      cloned.quote = QuoteStyle::None;
+
+      let block = match quote {
+        QuoteStyle::Quote => Ok(BlockLiteral {
+          scopes: vec![],
+          block: cloned,
+        }),
+        QuoteStyle::Closure => exec_env.make_closure(cloned),
+        QuoteStyle::None => unreachable!(),
+      }
+      .map_err(|msg| self.create_error(exec_env, None, msg, vec![]))?;
+
+      Ok(Literal::Block(block))
     } else {
       let mut pure_exec_args: Vec<Literal> = vec![];
       for (expand, arg) in &self.args {
@@ -35,6 +53,7 @@ impl Block {
           if let Literal::List(_) = result {
           } else {
             return Err(self.create_error(
+              exec_env,
               None,
               format!("\"@\" needs the arg is a list literal. (Got {})", result.to_string()),
               pure_exec_args,
@@ -60,9 +79,9 @@ impl Block {
       exec_env.execute_procedure(&self.proc_name, &expanded_args).map_err(|proc_error| match proc_error {
         super::ProcedureError::CausedByBlockExec(block_error) => {
           let new_msg = block_error.msg.clone();
-          self.create_error(Some(block_error), new_msg, pure_exec_args)
+          self.create_error(&exec_env, Some(block_error), new_msg, pure_exec_args)
         }
-        super::ProcedureError::OtherError(msg) => self.create_error(None, msg, pure_exec_args),
+        super::ProcedureError::OtherError(msg) => self.create_error(exec_env, None, msg, pure_exec_args),
       })
     }
   }
@@ -100,12 +119,19 @@ impl Block {
         expand: false,
         proc_name: self.proc_name.clone(),
       },
+      scopes: err.scopes,
       caused_by: err.caused_by,
       msg: err.msg,
     }
   }
 
-  fn create_error(&self, caused_by: Option<Box<BlockError>>, msg: String, pure_exec_args: Vec<Literal>) -> BlockError {
+  fn create_error(
+    &self,
+    exec_env: &ExecuteEnv,
+    caused_by: Option<Box<BlockError>>,
+    msg: String,
+    pure_exec_args: Vec<Literal>,
+  ) -> BlockError {
     let mut children = vec![];
     for (i, (expand, block)) in self.args.iter().cloned().enumerate() {
       let proc_name = block.proc_name;
@@ -126,6 +152,7 @@ impl Block {
         expand: false,
         proc_name: self.proc_name.clone(),
       },
+      scopes: exec_env.get_scopes(),
       caused_by,
       msg,
     }
@@ -151,5 +178,6 @@ pub struct BlockErrorTree {
 pub struct BlockError {
   pub root: BlockErrorTree,
   pub caused_by: Option<Box<BlockError>>,
+  pub scopes: Vec<ExecuteScope>,
   pub msg: String,
 }

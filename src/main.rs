@@ -42,6 +42,26 @@ fn print_error(error: &BlockError) {
     print_error_rec(&now_error.root, &mut vec![false]);
     before_error = now_error;
   }
+
+  eprintln!("\n名前空間：");
+  for scope in &error.scopes {
+    let keys: Vec<String> = scope
+      .borrow()
+      .namespace
+      .iter()
+      .map(|(k, v)| {
+        format!(
+          "{}{}",
+          k,
+          match v {
+            structs::ProcedureOrVar::Var(var) => format!("={}", var.to_string()),
+            _ => "".to_owned(),
+          }
+        )
+      })
+      .collect();
+    eprintln!("[{}]", keys.join(", "));
+  }
 }
 
 fn print_error_rec(tree: &BlockErrorTree, after_exists: &mut Vec<bool>) {
@@ -204,6 +224,27 @@ mod tests {
   }
 
   #[test]
+  fn bind_var2() {
+    let (r, o, _) = exec_file(include_str!("test/bind_var2.tr"));
+    assert_eq!(r, Ok(Literal::Void));
+    assert_eq!(o, "42");
+  }
+
+  #[test]
+  fn bind_var3() {
+    let (r, o, _) = exec_file(include_str!("test/bind_var3.tr"));
+    assert_eq!(r, Ok(Literal::Void));
+    assert_eq!(o, "42");
+  }
+
+  #[test]
+  fn generator() {
+    let (r, o, _) = exec_file(include_str!("test/generator.tr"));
+    assert_eq!(r, Ok(Literal::Void));
+    assert_eq!(o, "12");
+  }
+
+  #[test]
   fn cmd() {
     let (r, o, cmd) = exec_file(include_str!("test/cmd.tr"));
     assert_eq!(r, Ok(Literal::String("".to_string())));
@@ -233,10 +274,24 @@ mod tests {
   }
 
   #[test]
+  fn recursion2() {
+    let (r, o, _) = exec_file(include_str!("test/recursion2.tr"));
+    assert_eq!(r, Ok(Literal::Void));
+    assert_eq!(o, "6\n");
+  }
+
+  #[test]
   fn tr_while() {
     let (r, o, _) = exec_file(include_str!("test/tr_while.tr"));
     assert_eq!(r, Ok(Literal::Void));
     assert_eq!(o, "012");
+  }
+
+  #[test]
+  fn secret_for() {
+    let (r, o, _) = exec_file(include_str!("test/secret_for.tr"));
+    assert_eq!(r, Ok(Literal::Void));
+    assert_eq!(o, "42\n");
   }
 
   mod modules {

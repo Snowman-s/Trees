@@ -13,7 +13,7 @@ pub enum ProcedureOrVar {
 
 #[derive(PartialEq, Eq, Debug, Clone)]
 pub struct ExecuteScopeBody {
-  namespace: HashMap<String, ProcedureOrVar>,
+  pub namespace: HashMap<String, ProcedureOrVar>,
 }
 
 pub type ExecuteScope = Rc<RefCell<ExecuteScopeBody>>;
@@ -74,6 +74,24 @@ impl ExecuteEnv {
     }
     self.scopes.pop();
   }
+  pub fn reload_scope(&mut self, scope: ExecuteScope) {
+    self.scopes.push(scope);
+  }
+  pub fn freeze_scope(&mut self) -> ExecuteScope {
+    if self.scopes.len() <= 1 {
+      panic!("Scopes were not enough.Please report the problem to developers.")
+    }
+    self.scopes.pop().unwrap()
+  }
+
+  pub fn new_scopes(&mut self, scopes: Vec<ExecuteScope>) {
+    self.scopes.extend(scopes);
+  }
+  pub fn back_scopes(&mut self, len: usize) {
+    for _ in 0..len {
+      self.back_scope();
+    }
+  }
 
   fn find_scope(&self, name: &str) -> Option<ExecuteScope> {
     self.scopes.iter().rev().find(|scope| scope.borrow().namespace.contains_key(name)).cloned()
@@ -129,10 +147,9 @@ impl ExecuteEnv {
           let behavior_or_var = behavior_or_var.clone();
           match behavior_or_var {
             ProcedureOrVar::FnProcedure(be) => be(self, exec_args),
-            ProcedureOrVar::BlockProcedure(block) => {
-              self.defset_args(exec_args);
-              block.execute_without_scope(self).map_err(|err| ProcedureError::CausedByBlockExec(Box::new(err)))
-            }
+            ProcedureOrVar::BlockProcedure(block) => block
+              .execute_without_scope(self, |exec_env| exec_env.defset_args(exec_args))
+              .map_err(|err| ProcedureError::CausedByBlockExec(Box::new(err))),
             ProcedureOrVar::Var(var) => Ok(var.clone()),
           }
         } else {
@@ -155,6 +172,9 @@ impl ExecuteEnv {
   pub fn defset_var(&mut self, name: &str, value: &Literal) {
     let target = self.scopes.len() - 2;
     self.scopes[target].borrow_mut().namespace.insert(name.to_string(), ProcedureOrVar::Var(value.clone()));
+  }
+  pub fn defset_var_into_last_scope(&mut self, name: &str, value: &Literal) {
+    self.scopes.last().unwrap().borrow_mut().namespace.insert(name.to_string(), ProcedureOrVar::Var(value.clone()));
   }
 
   pub fn set_var(&mut self, name: &String, value: &Literal) -> Result<(), String> {
@@ -228,32 +248,23 @@ impl ExecuteEnv {
 
     // 実行
     self.paths.push(parent);
-    let result = block.execute_without_scope(self).map_err(|err| ProcedureError::CausedByBlockExec(Box::new(err)))?;
+    let freezed = self.freeze_scope();
+    let result = block.execute(self).map_err(|err| ProcedureError::CausedByBlockExec(Box::new(err)))?;
+    self.reload_scope(freezed);
     self.paths.pop();
 
     Ok(result)
   }
 
-  pub fn block_to_literal(&mut self, block: Block) -> Result<BlockLiteral, String> {
-    let proc_name = block.proc_name.clone();
-
-    let bind = if proc_name.starts_with('$') {
-      None
-    } else {
-      self.bind_name(&proc_name).map(Box::new)
-    };
-
-    let mut literal_args = vec![];
-    for (expand, child) in block.args {
-      literal_args.push((expand, Box::new(self.block_to_literal(*child)?)))
-    }
-
+  pub fn make_closure(&mut self, block: Block) -> Result<BlockLiteral, String> {
     Ok(BlockLiteral {
-      proc_name: block.proc_name,
-      bind,
-      args: literal_args,
-      quote: block.quote,
+      scopes: self.scopes.to_vec(),
+      block,
     })
+  }
+
+  pub fn get_scopes(&self) -> Vec<ExecuteScope> {
+    self.scopes.clone()
   }
 }
 

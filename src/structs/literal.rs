@@ -1,7 +1,4 @@
-use super::{
-  exec_env::{ExecuteScope, ProcBind},
-  Block, BlockError, BlockErrorTree, BlockResult, ExecuteEnv,
-};
+use super::{exec_env::ExecuteScope, Block, BlockError, ExecuteEnv};
 
 #[derive(PartialEq, Eq, Debug, Clone)]
 pub enum Literal {

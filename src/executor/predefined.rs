@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::structs::{Literal, ProcedureError, ProcedureOrVar};
+use crate::structs::{Literal, ProcedureOrVar};
 
 fn type_error_msg(proc_name: &str, index: usize, actually: &Literal, expected: &str) -> String {
   format!(

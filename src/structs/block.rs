@@ -79,7 +79,7 @@ impl Block {
       exec_env.execute_procedure(&self.proc_name, &expanded_args).map_err(|proc_error| match proc_error {
         super::ProcedureError::CausedByBlockExec(block_error) => {
           let new_msg = block_error.msg.clone();
-          self.create_error(&exec_env, Some(block_error), new_msg, pure_exec_args)
+          self.create_error(exec_env, Some(block_error), new_msg, pure_exec_args)
         }
         super::ProcedureError::OtherError(msg) => self.create_error(exec_env, None, msg, pure_exec_args),
       })

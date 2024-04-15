@@ -173,6 +173,9 @@ impl ExecuteEnv {
     let target = self.scopes.len() - 2;
     self.scopes[target].borrow_mut().namespace.insert(name.to_string(), ProcedureOrVar::Var(value.clone()));
   }
+  pub fn defset_var_into_last_scope(&mut self, name: &str, value: &Literal) {
+    self.scopes.last().unwrap().borrow_mut().namespace.insert(name.to_string(), ProcedureOrVar::Var(value.clone()));
+  }
 
   pub fn set_var(&mut self, name: &String, value: &Literal) -> Result<(), String> {
     if let Some(scope) = self.find_scope(name) {

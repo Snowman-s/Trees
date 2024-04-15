@@ -287,6 +287,13 @@ mod tests {
     assert_eq!(o, "012");
   }
 
+  #[test]
+  fn secret_for() {
+    let (r, o, _) = exec_file(include_str!("test/secret_for.tr"));
+    assert_eq!(r, Ok(Literal::Void));
+    assert_eq!(o, "42\n");
+  }
+
   mod modules {
     use crate::{structs::Literal, tests::exec_file};
 

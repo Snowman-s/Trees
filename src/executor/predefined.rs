@@ -206,8 +206,7 @@ pub fn predefined_procs() -> HashMap<String, ProcedureOrVar> {
   }, _exec_env, args;;list:list);
   add_map!("for", {
     for i in 0..times {
-      exec_env.defset_var(&var, &Literal::Int(i));
-      child.execute_without_scope(exec_env, |_|{})?;
+      child.execute_without_scope(exec_env, |exec_env|{exec_env.defset_var_into_last_scope(&var, &Literal::Int(i))})?;
     }
     Ok(Literal::Void)
   }, exec_env, args; times:int, var:str, child:block);

@@ -57,7 +57,6 @@ impl BlockLiteral {
     let freezed = exec_env.freeze_scope();
     exec_env.new_scope();
     exec_env.new_scopes(scopes.to_vec());
-    // $から始まる変数をすべて内部コピーするようにする
     inner_vars(exec_env);
     let result = block.execute_without_scope(exec_env)?;
     exec_env.back_scopes(scopes_len);

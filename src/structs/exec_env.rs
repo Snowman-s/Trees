@@ -21,7 +21,7 @@ pub type ExecuteScope = Rc<RefCell<ExecuteScopeBody>>;
 
 pub type Includer = Box<dyn FnMut(&Vec<String>) -> Result<Block, String>>;
 pub struct ExecuteEnv {
-  scopes: Vec<ExecuteScope>,
+  scopes: Vec<Vec<ExecuteScope>>,
   input_stream: Box<dyn FnMut() -> String>,
   out_stream: Box<dyn FnMut(String)>,
   cmd_executor: Box<dyn FnMut(String, Vec<String>) -> Result<String, String>>,
@@ -54,10 +54,10 @@ impl ExecuteEnv {
     includer: Includer,
   ) -> ExecuteEnv {
     ExecuteEnv {
-      scopes: vec![Rc::new(RefCell::new(ExecuteScopeBody {
+      scopes: vec![vec![Rc::new(RefCell::new(ExecuteScopeBody {
         paths: vec![],
         namespace,
-      }))],
+      }))]],
       input_stream,
       out_stream,
       cmd_executor,
@@ -65,49 +65,65 @@ impl ExecuteEnv {
     }
   }
 
-  pub fn new_scope(&mut self) {
-    let last = self.scopes.last().unwrap().borrow().paths.clone();
+  fn get_last_scopes(&self) -> &Vec<ExecuteScope> {
+    self.scopes.last().unwrap()
+  }
+  fn get_last_scopes_mut(&mut self) -> &mut Vec<ExecuteScope> {
+    self.scopes.last_mut().unwrap()
+  }
+  fn get_upper_scope(&mut self) -> ExecuteScope {
+    let scopes = self.get_last_scopes_mut();
+    scopes[scopes.len() - 2].clone()
+  }
+  fn get_upper2_scope(&mut self) -> Option<ExecuteScope> {
+    let scopes = self.get_last_scopes_mut();
+    scopes.get(scopes.len() - 3).cloned()
+  }
+  fn get_last_scope(&self) -> ExecuteScope {
+    self.get_last_scopes().last().unwrap().clone()
+  }
 
-    self.scopes.push(Rc::new(RefCell::new(ExecuteScopeBody {
-      paths: last,
+  pub fn new_scope(&mut self) {
+    let paths = self.get_last_scope().borrow().paths.clone();
+
+    self.get_last_scopes_mut().push(Rc::new(RefCell::new(ExecuteScopeBody {
+      paths,
       namespace: HashMap::new(),
     })));
   }
   pub fn back_scope(&mut self) {
-    if self.scopes.len() <= 1 {
+    if self.get_last_scopes_mut().len() <= 1 {
       panic!("Scopes were not enough.Please report the problem to developers.")
     }
-    self.scopes.pop();
+    self.get_last_scopes_mut().pop();
   }
   pub fn reload_scope(&mut self, scope: ExecuteScope) {
-    self.scopes.push(scope);
+    self.get_last_scopes_mut().push(scope);
   }
   pub fn freeze_scope(&mut self) -> ExecuteScope {
-    if self.scopes.len() <= 1 {
+    if self.get_last_scopes_mut().len() <= 1 {
       panic!("Scopes were not enough.Please report the problem to developers.")
     }
-    self.scopes.pop().unwrap()
+    self.get_last_scopes_mut().pop().unwrap()
   }
-
   pub fn new_scopes(&mut self, scopes: Vec<ExecuteScope>) {
-    self.scopes.extend(scopes);
+    self.scopes.push(scopes);
   }
-  pub fn back_scopes(&mut self, len: usize) {
-    for _ in 0..len {
-      self.back_scope();
-    }
+  pub fn back_scopes(&mut self) {
+    self.scopes.pop().unwrap();
   }
 
   fn find_scope(&self, name: &str) -> Option<ExecuteScope> {
-    self.scopes.iter().rev().find(|scope| scope.borrow().namespace.contains_key(name)).cloned()
+    self.get_last_scopes().iter().rev().find(|scope| scope.borrow().namespace.contains_key(name)).cloned()
   }
 
   fn find_namespace(&self, name: &str) -> Option<ProcedureOrVar> {
-    self.scopes.iter().rev().find_map(|scope| scope.borrow().namespace.get(name).cloned())
+    self.get_last_scopes().iter().rev().find_map(|scope| scope.borrow().namespace.get(name).cloned())
   }
 
   pub fn defset_args(&mut self, args: &Vec<Literal>) {
-    let namespace = &mut self.scopes.last().unwrap().borrow_mut().namespace;
+    let binding = self.get_last_scope();
+    let namespace = &mut binding.borrow_mut().namespace;
     namespace.insert("$args".to_string(), ProcedureOrVar::Var(Literal::List(args.clone())));
     for (i, arg) in args.iter().enumerate() {
       namespace.insert(format!("${}", i), ProcedureOrVar::Var(arg.clone()));
@@ -175,11 +191,10 @@ impl ExecuteEnv {
   }
 
   pub fn defset_var(&mut self, name: &str, value: &Literal) {
-    let target = self.scopes.len() - 2;
-    self.scopes[target].borrow_mut().namespace.insert(name.to_string(), ProcedureOrVar::Var(value.clone()));
+    self.get_upper_scope().borrow_mut().namespace.insert(name.to_string(), ProcedureOrVar::Var(value.clone()));
   }
   pub fn defset_var_into_last_scope(&mut self, name: &str, value: &Literal) {
-    self.scopes.last().unwrap().borrow_mut().namespace.insert(name.to_string(), ProcedureOrVar::Var(value.clone()));
+    self.get_last_scope().borrow_mut().namespace.insert(name.to_string(), ProcedureOrVar::Var(value.clone()));
   }
 
   pub fn set_var(&mut self, name: &String, value: &Literal) -> Result<(), String> {
@@ -194,19 +209,13 @@ impl ExecuteEnv {
   pub fn def_proc(&mut self, name: &String, block: &BlockLiteral) {
     let behavior = ProcedureOrVar::BlockProcedure(block.clone());
 
-    if let Some(scope) = self.find_scope(name) {
-      scope.borrow_mut().namespace.insert(name.to_string(), behavior);
-    } else {
-      let target = self.scopes.len() - 2;
-      self.scopes[target].borrow_mut().namespace.insert(name.to_string(), behavior);
-    };
+    self.get_upper_scope().borrow_mut().namespace.insert(name.to_string(), behavior);
   }
 
   pub fn export(&mut self, name: &String) -> Result<(), String> {
     if let Some(value) = self.find_namespace(name) {
       let value = value.clone();
-      let cont_index = self.scopes.len() - 3;
-      if let Some(context) = self.scopes.get_mut(cont_index) {
+      if let Some(context) = self.get_upper2_scope() {
         context.borrow_mut().namespace.insert(name.clone(), value.clone());
       };
       Ok(())
@@ -217,11 +226,11 @@ impl ExecuteEnv {
 
   pub fn reexport(&mut self) {
     let scope_len = self.scopes.len();
-    let high = scope_len - 2;
-    let high2 = scope_len - 3;
-    for (key, proc_or_var) in self.scopes.last().unwrap().borrow().namespace.clone().iter() {
-      self.scopes[high].borrow_mut().namespace.insert(key.clone(), proc_or_var.clone());
-      self.scopes[high2].borrow_mut().namespace.insert(key.clone(), proc_or_var.clone());
+    for (key, proc_or_var) in self.get_last_scope().borrow().namespace.clone().iter() {
+      self.get_upper_scope().borrow_mut().namespace.insert(key.clone(), proc_or_var.clone());
+      if let Some(exp_scope) = self.get_upper2_scope() {
+        exp_scope.borrow_mut().namespace.insert(key.clone(), proc_or_var.clone());
+      }
     }
   }
 
@@ -247,14 +256,14 @@ impl ExecuteEnv {
     };
 
     // コンパイル
-    let mut paths = self.scopes.last().unwrap().borrow().paths.clone();
+    let mut paths = self.get_last_scope().borrow().paths.clone();
     paths.push(path_str);
     let block = (self.includer)(&paths).map_err(ProcedureError::OtherError)?;
 
     // 実行
     let freezed = self.freeze_scope();
     self.new_scope();
-    self.scopes.last().unwrap().borrow_mut().paths.push(parent);
+    self.get_last_scope().borrow_mut().paths.push(parent);
     let result = block.execute_without_scope(self).map_err(|err| ProcedureError::CausedByBlockExec(Box::new(err)))?;
     self.back_scope();
     self.reload_scope(freezed);
@@ -264,13 +273,13 @@ impl ExecuteEnv {
 
   pub fn make_closure(&mut self, block: Block) -> Result<BlockLiteral, String> {
     Ok(BlockLiteral {
-      scopes: self.scopes.to_vec(),
+      scopes: self.get_last_scopes_mut().clone(),
       block,
     })
   }
 
   pub fn get_scopes(&self) -> Vec<ExecuteScope> {
-    self.scopes.clone()
+    self.get_last_scopes().clone()
   }
 }
 

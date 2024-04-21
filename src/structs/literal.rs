@@ -48,15 +48,18 @@ impl BlockLiteral {
     inner_vars: impl FnOnce(&mut ExecuteEnv),
   ) -> Result<Literal, BlockError> {
     let BlockLiteral { scopes, block } = self;
-
-    let scopes_len = scopes.len();
+    let is_closure = !scopes.is_empty();
 
     let freezed = exec_env.freeze_scope();
     exec_env.new_scope();
-    exec_env.new_scopes(scopes.to_vec());
+    if is_closure {
+      exec_env.new_scopes(scopes.to_vec());
+    }
     inner_vars(exec_env);
     let result = block.execute_without_scope(exec_env)?;
-    exec_env.back_scopes(scopes_len);
+    if is_closure {
+      exec_env.back_scopes();
+    }
     exec_env.back_scope();
     exec_env.reload_scope(freezed);
 

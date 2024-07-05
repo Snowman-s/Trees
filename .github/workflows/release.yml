@@ -44,6 +44,7 @@ jobs:
 
       - name: Remove previous release asset
         id: remove-asset
+        shell: bash
         run: |
           repo_owner=$(echo $GITHUB_REPOSITORY | cut -d'/' -f1)
           repo_name=$(echo $GITHUB_REPOSITORY | cut -d'/' -f2)

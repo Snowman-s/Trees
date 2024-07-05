@@ -29,7 +29,7 @@ jobs:
         id: release-notes
         uses: release-drafter/release-drafter@v6
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
   
       - name: Update Cargo.toml with new version
         shell: bash
@@ -52,8 +52,12 @@ jobs:
           release_name: ${{ steps.release-notes.outputs.name }}
           upload_url: ${{ steps.release-notes.outputs.upload_url }}
 
-      - name: Upload Artifact
-        uses: actions/upload-artifact@v2
+      - name: Upload Artifact to Release Draft
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          name: trees-${{steps.release-notes.outputs.tag_name}}-x86_64-pc-windows-msvc.exe
-          path: target\x86_64-pc-windows-msvc\release\trees.exe
+          upload_url: ${{ steps.release-notes.outputs.upload_url }}
+          asset_path: target/x86_64-pc-windows-msvc/release/trees.exe
+          asset_name: trees-${{ steps.release-notes.outputs.tag_name }}-x86_64-pc-windows-msvc.exe
+          asset_content_type: application/octet-stream

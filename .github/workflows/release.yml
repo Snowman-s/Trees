@@ -32,6 +32,7 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
   
       - name: Update Cargo.toml with new version
+        shell: bash
         run: |
           version=${{ steps.release-notes.outputs.tag_name }}
           version=${version#v}

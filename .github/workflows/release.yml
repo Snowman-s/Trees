@@ -42,18 +42,6 @@ jobs:
         run: |
           cargo build --release --target x86_64-pc-windows-msvc
 
-      - name: Remove previous release asset
-        id: remove-asset
-        shell: bash
-        run: |
-          repo_owner=$(echo $GITHUB_REPOSITORY | cut -d'/' -f1)
-          repo_name=$(echo $GITHUB_REPOSITORY | cut -d'/' -f2)
-          releases_url="https://api.github.com/repos/$repo_owner/$repo_name/releases"
-          release_id=$(curl -s $releases_url | jq -r '.[0].id')
-          asset_id=$(curl -s $releases_url/$release_id/assets | jq -r '.[] | select(.name == "trees-${{ steps.release-notes.outputs.tag_name }}-x86_64-pc-windows-msvc.exe").id')
-          if [ -n "$asset_id" ]; then
-            curl -s -X DELETE -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" $releases_url/assets/$asset_id
-          fi
       - name: Upload Artifact to Release Draft
         uses: actions/upload-release-asset@v1
         env:

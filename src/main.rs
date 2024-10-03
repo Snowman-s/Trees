@@ -7,6 +7,7 @@ use crate::structs::BlockResult;
 
 mod compile;
 mod executor;
+mod intermed_repr;
 mod structs;
 
 fn main() {

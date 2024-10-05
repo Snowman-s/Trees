@@ -2,13 +2,14 @@ use compile::compile;
 use executor::execute;
 use std::{
   env,
+  ffi::OsStr,
   fs::File,
   io::{Read, Write},
   path::{Path, PathBuf},
   process::exit,
   rc::Rc,
 };
-use structs::{Block, BlockError, BlockErrorTree};
+use structs::{Block, BlockError, BlockErrorTree, Includer};
 
 use crate::structs::BlockResult;
 
@@ -65,6 +66,35 @@ fn main() {
     }
   }
 
+  //Includer を設定
+  let includer = |parent: Rc<PathBuf>| {
+    Box::new(move |name: &Vec<String>| {
+      let target = name.iter().fold(parent.to_path_buf(), |a, b| a.join(b));
+      match target.extension() {
+        Some(ext) => {
+          if ext == "tr" {
+            compile_file(&target)
+          } else {
+            // 中間コード
+            let mut file = File::open(target).map_err(|e| e.to_string())?;
+            let mut intermed_code: Vec<u8> = Vec::new();
+            file.read_to_end(&mut intermed_code).unwrap();
+            let block = Block::from_intermed_repr(&intermed_code);
+            Ok(block)
+          }
+        }
+        None => {
+          // 中間コード
+          let mut file = File::open(target).map_err(|e| e.to_string())?;
+          let mut intermed_code: Vec<u8> = Vec::new();
+          file.read_to_end(&mut intermed_code).unwrap();
+          let block = Block::from_intermed_repr(&intermed_code);
+          Ok(block)
+        }
+      }
+    })
+  };
+
   match cmd_mode {
     CommandMode::Auto => unreachable!(),
     CommandMode::Compile => {
@@ -80,10 +110,7 @@ fn main() {
       file.read_to_end(&mut intermed_code).unwrap();
       let block = Block::from_intermed_repr(&intermed_code);
       let parent = Rc::new(cli.input.parent().unwrap().to_path_buf());
-      match execute(
-        block,
-        Box::new(move |name| compile_file(&name.iter().fold(parent.to_path_buf(), |a, b| a.join(b)))),
-      ) {
+      match execute(block, includer(parent)) {
         Ok(_) => {}
         Err(err) => print_error(&err),
       };
@@ -91,10 +118,7 @@ fn main() {
     CommandMode::ExecD => {
       let block = compile_file(cli.input.as_path()).unwrap();
       let parent = Rc::new(cli.input.parent().unwrap().to_path_buf());
-      match execute(
-        block,
-        Box::new(move |name| compile_file(&name.iter().fold(parent.to_path_buf(), |a, b| a.join(b)))),
-      ) {
+      match execute(block, includer(parent)) {
         Ok(_) => {}
         Err(err) => print_error(&err),
       };

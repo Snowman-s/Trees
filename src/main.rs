@@ -1,15 +1,14 @@
 use compile::compile;
 use executor::execute;
 use std::{
-  env,
-  ffi::OsStr,
-  fs::File,
+  fs::{File, FileType},
   io::{Read, Write},
   path::{Path, PathBuf},
   process::exit,
   rc::Rc,
 };
-use structs::{Block, BlockError, BlockErrorTree, Includer};
+use structs::{Block, BlockError, BlockErrorTree};
+use walkdir::WalkDir;
 
 use crate::structs::BlockResult;
 
@@ -51,17 +50,21 @@ fn main() {
   let mut cmd_mode = cli.mode;
 
   if cmd_mode == CommandMode::Auto {
-    match cli.input.extension() {
-      Some(str) => {
-        if str == "tr" {
-          cmd_mode = CommandMode::ExecD;
-        } else if str == "trm" {
-          cmd_mode = CommandMode::Exec;
+    if cli.input.is_dir() {
+      cmd_mode = CommandMode::Compile
+    } else {
+      match cli.input.extension() {
+        Some(str) => {
+          if str == "tr" {
+            cmd_mode = CommandMode::ExecD;
+          } else if str == "trm" {
+            cmd_mode = CommandMode::Exec;
+          }
         }
-      }
-      None => {
-        eprintln!("Cannot determine mode from that file name. Please specify `--mode`.");
-        exit(-1);
+        None => {
+          eprintln!("Cannot determine mode from that file name. Please specify `--mode`.");
+          exit(-1);
+        }
       }
     }
   }
@@ -98,11 +101,25 @@ fn main() {
   match cmd_mode {
     CommandMode::Auto => unreachable!(),
     CommandMode::Compile => {
-      let block = compile_file(cli.input.as_path()).unwrap();
-      let mut output = cli.input.clone();
-      output.set_extension("trm");
-      let mut file = File::create(output).unwrap();
-      file.write_all(&block.to_intermed_repr()).unwrap();
+      if cli.input.is_dir() {
+        for path in WalkDir::new(cli.input).into_iter().filter_map(|e| e.ok()).filter(|e| e.file_type().is_file()) {
+          if let Some(ext) = path.path().extension() {
+            if ext == "tr" {
+              let block = compile_file(path.path()).unwrap();
+              let mut output = path.path().to_path_buf();
+              output.set_extension("trm");
+              let mut file = File::create(output).unwrap();
+              file.write_all(&block.to_intermed_repr()).unwrap();
+            }
+          }
+        }
+      } else {
+        let block = compile_file(cli.input.as_path()).unwrap();
+        let mut output = cli.input.clone();
+        output.set_extension("trm");
+        let mut file = File::create(output).unwrap();
+        file.write_all(&block.to_intermed_repr()).unwrap();
+      }
     }
     CommandMode::Exec => {
       let mut file = File::open(&cli.input).unwrap();

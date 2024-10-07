@@ -23,7 +23,7 @@ use clap::{Parser, ValueEnum};
 #[derive(Parser)]
 #[command(
   name = "Trees",
-  version = "0.1.0",
+  version = "0.2.0",
   author = "SnowEsamosc <snowman.snowsnow@gmail.com>"
 )]
 struct Cli {

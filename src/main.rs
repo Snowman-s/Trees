@@ -1,6 +1,7 @@
 use compile::compile;
 use executor::execute;
 use std::{
+  error::Error,
   fs::{File, FileType},
   io::{Read, Write},
   path::{Path, PathBuf},
@@ -105,20 +106,14 @@ fn main() {
         for path in WalkDir::new(cli.input).into_iter().filter_map(|e| e.ok()).filter(|e| e.file_type().is_file()) {
           if let Some(ext) = path.path().extension() {
             if ext == "tr" {
-              let block = compile_file(path.path()).unwrap();
-              let mut output = path.path().to_path_buf();
-              output.set_extension("trm");
-              let mut file = File::create(output).unwrap();
-              file.write_all(&block.to_intermed_repr()).unwrap();
+              if let Err(err) = write_compiled_file(path.path()) {
+                eprintln!("Error in {}: {}", path.path().to_str().unwrap_or("?"), err)
+              }
             }
           }
         }
-      } else {
-        let block = compile_file(cli.input.as_path()).unwrap();
-        let mut output = cli.input.clone();
-        output.set_extension("trm");
-        let mut file = File::create(output).unwrap();
-        file.write_all(&block.to_intermed_repr()).unwrap();
+      } else if let Err(err) = write_compiled_file(&cli.input) {
+        eprintln!("Error in {}: {}", cli.input.to_str().unwrap_or("?"), err)
       }
     }
     CommandMode::Exec => {
@@ -149,6 +144,16 @@ fn compile_file(file_path: &Path) -> Result<Block, String> {
   codes.read_to_string(&mut buf).map_err(|err| format!("failed to read {:?}: {}", &file_path.to_str(), err))?;
 
   compile(buf.split('\n').map(|t| t.to_owned()).collect())
+}
+
+fn write_compiled_file(path: &Path) -> Result<(), String> {
+  let block = compile_file(path)?;
+  let mut output = path.to_path_buf();
+  output.set_extension("trm");
+  let mut file = File::create(output).map_err(|e| e.to_string())?;
+  file.write_all(&block.to_intermed_repr()).map_err(|e| e.to_string())?;
+
+  Ok(())
 }
 
 fn print_error(error: &BlockError) {

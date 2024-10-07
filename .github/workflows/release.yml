@@ -28,8 +28,8 @@ jobs:
       - name: Extract Cargo.toml version
         id: cargo_version
         run: |
-          for /f "tokens=2 delims== " %%i in ('findstr /i "^version =" Cargo.toml') do echo CARGO_VERSION=%%i
-          echo CARGO_VERSION=%CARGO_VERSION:~1,-1%>>%GITHUB_ENV%
+          $version = Select-String -Path "Cargo.toml" -Pattern '^version\s*=\s*".*"' | ForEach-Object { $_.Matches.Groups[0].Value -replace '^version\s*=\s*"(.*)"', '$1' }
+          echo "CARGO_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8
 
       - name: Generate release notes
         id: release-notes

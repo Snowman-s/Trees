@@ -1,35 +1,159 @@
 use compile::compile;
 use executor::execute;
-use std::{env, fs::File, io::Read, path::PathBuf, rc::Rc};
+use std::{
+  error::Error,
+  fs::{File, FileType},
+  io::{Read, Write},
+  path::{Path, PathBuf},
+  process::exit,
+  rc::Rc,
+};
 use structs::{Block, BlockError, BlockErrorTree};
+use walkdir::WalkDir;
 
 use crate::structs::BlockResult;
 
 mod compile;
 mod executor;
+mod intermed_repr;
 mod structs;
 
-fn main() {
-  let args: Vec<String> = env::args().collect();
-  let code_file = &args[1];
+use clap::{Parser, ValueEnum};
 
-  let path = Rc::new(env::current_dir().unwrap().join(code_file));
-  let block = compile_file(path.to_path_buf()).unwrap();
-  match execute(
-    block,
-    Box::new(move |name| compile_file(name.iter().fold(path.parent().unwrap().to_path_buf(), |a, b| a.join(b)))),
-  ) {
-    Ok(_) => {}
-    Err(err) => print_error(&err),
-  };
+#[derive(Parser)]
+#[command(
+  name = "Trees",
+  version = "0.1.0",
+  author = "SnowEsamosc <snowman.snowsnow@gmail.com>"
+)]
+struct Cli {
+  #[arg(short, long, value_enum, default_value_t=CommandMode::Auto)]
+  mode: CommandMode,
+
+  input: PathBuf,
 }
 
-fn compile_file(file_path: PathBuf) -> Result<Block, String> {
-  let mut codes = File::open(&file_path).map_err(|err| format!("failed to read {:?}: {}", &file_path.to_str(), err))?;
+#[derive(Clone, PartialEq, Eq, ValueEnum)]
+enum CommandMode {
+  // ファイル拡張子を見て自動でコマンドを実行
+  Auto,
+  // コンパイル
+  Compile,
+  // 中間コード実行
+  Exec,
+  // 直接実行(Execute Directly)
+  ExecD,
+}
+
+fn main() {
+  let cli = Cli::parse();
+
+  let mut cmd_mode = cli.mode;
+
+  if cmd_mode == CommandMode::Auto {
+    if cli.input.is_dir() {
+      cmd_mode = CommandMode::Compile
+    } else {
+      match cli.input.extension() {
+        Some(str) => {
+          if str == "tr" {
+            cmd_mode = CommandMode::ExecD;
+          } else if str == "trm" {
+            cmd_mode = CommandMode::Exec;
+          }
+        }
+        None => {
+          eprintln!("Cannot determine mode from that file name. Please specify `--mode`.");
+          exit(-1);
+        }
+      }
+    }
+  }
+
+  //Includer を設定
+  let includer = |parent: Rc<PathBuf>| {
+    Box::new(move |name: &Vec<String>| {
+      let target = name.iter().fold(parent.to_path_buf(), |a, b| a.join(b));
+      match target.extension() {
+        Some(ext) => {
+          if ext == "tr" {
+            compile_file(&target)
+          } else {
+            // 中間コード
+            let mut file = File::open(target).map_err(|e| e.to_string())?;
+            let mut intermed_code: Vec<u8> = Vec::new();
+            file.read_to_end(&mut intermed_code).unwrap();
+            let block = Block::from_intermed_repr(&intermed_code);
+            Ok(block)
+          }
+        }
+        None => {
+          // 中間コード
+          let mut file = File::open(target).map_err(|e| e.to_string())?;
+          let mut intermed_code: Vec<u8> = Vec::new();
+          file.read_to_end(&mut intermed_code).unwrap();
+          let block = Block::from_intermed_repr(&intermed_code);
+          Ok(block)
+        }
+      }
+    })
+  };
+
+  match cmd_mode {
+    CommandMode::Auto => unreachable!(),
+    CommandMode::Compile => {
+      if cli.input.is_dir() {
+        for path in WalkDir::new(cli.input).into_iter().filter_map(|e| e.ok()).filter(|e| e.file_type().is_file()) {
+          if let Some(ext) = path.path().extension() {
+            if ext == "tr" {
+              if let Err(err) = write_compiled_file(path.path()) {
+                eprintln!("Error in {}: {}", path.path().to_str().unwrap_or("?"), err)
+              }
+            }
+          }
+        }
+      } else if let Err(err) = write_compiled_file(&cli.input) {
+        eprintln!("Error in {}: {}", cli.input.to_str().unwrap_or("?"), err)
+      }
+    }
+    CommandMode::Exec => {
+      let mut file = File::open(&cli.input).unwrap();
+      let mut intermed_code: Vec<u8> = Vec::new();
+      file.read_to_end(&mut intermed_code).unwrap();
+      let block = Block::from_intermed_repr(&intermed_code);
+      let parent = Rc::new(cli.input.parent().unwrap().to_path_buf());
+      match execute(block, includer(parent)) {
+        Ok(_) => {}
+        Err(err) => print_error(&err),
+      };
+    }
+    CommandMode::ExecD => {
+      let block = compile_file(cli.input.as_path()).unwrap();
+      let parent = Rc::new(cli.input.parent().unwrap().to_path_buf());
+      match execute(block, includer(parent)) {
+        Ok(_) => {}
+        Err(err) => print_error(&err),
+      };
+    }
+  }
+}
+
+fn compile_file(file_path: &Path) -> Result<Block, String> {
+  let mut codes = File::open(file_path).map_err(|err| format!("failed to read {:?}: {}", &file_path.to_str(), err))?;
   let mut buf: String = String::new();
   codes.read_to_string(&mut buf).map_err(|err| format!("failed to read {:?}: {}", &file_path.to_str(), err))?;
 
   compile(buf.split('\n').map(|t| t.to_owned()).collect())
+}
+
+fn write_compiled_file(path: &Path) -> Result<(), String> {
+  let block = compile_file(path)?;
+  let mut output = path.to_path_buf();
+  output.set_extension("trm");
+  let mut file = File::create(output).map_err(|e| e.to_string())?;
+  file.write_all(&block.to_intermed_repr()).map_err(|e| e.to_string())?;
+
+  Ok(())
 }
 
 fn print_error(error: &BlockError) {

@@ -25,19 +25,19 @@ jobs:
       - name: Install MSVC toolchain
         run: rustup target add x86_64-pc-windows-msvc
 
+      - name: Extract Cargo.toml version
+        id: cargo_version
+        run: |
+          for /f "tokens=2 delims== " %%i in ('findstr /i "^version =" Cargo.toml') do echo CARGO_VERSION=%%i
+          echo CARGO_VERSION=%CARGO_VERSION:~1,-1%>>%GITHUB_ENV%
+
       - name: Generate release notes
         id: release-notes
         uses: release-drafter/release-drafter@v6
         with:
+          version: ${{ env.CARGO_VERSION }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-  
-      - name: Update Cargo.toml with new version
-        shell: bash
-        run: |
-          version=${{ steps.release-notes.outputs.tag_name }}
-          version=${version#v}
-          sed -i "s/version = \"[0-9]*\.[0-9]*\.[0-9]*\"/version = \"$version\"/" Cargo.toml
-      
+
       - name: Build
         run: |
           cargo build --release --target x86_64-pc-windows-msvc

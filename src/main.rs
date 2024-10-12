@@ -1,8 +1,7 @@
 use compile::compile;
 use executor::execute;
 use std::{
-  error::Error,
-  fs::{File, FileType},
+  fs::File,
   io::{Read, Write},
   path::{Path, PathBuf},
   process::exit,
@@ -80,19 +79,15 @@ fn main() {
             compile_file(&target)
           } else {
             // 中間コード
-            let mut file = File::open(target).map_err(|e| e.to_string())?;
-            let mut intermed_code: Vec<u8> = Vec::new();
-            file.read_to_end(&mut intermed_code).unwrap();
-            let block = Block::from_intermed_repr(&intermed_code);
+            let file = File::open(target).map_err(|e| e.to_string())?;
+            let block = Block::from_intermed_repr(&mut file.bytes().map(|res| res.unwrap()));
             Ok(block)
           }
         }
         None => {
           // 中間コード
-          let mut file = File::open(target).map_err(|e| e.to_string())?;
-          let mut intermed_code: Vec<u8> = Vec::new();
-          file.read_to_end(&mut intermed_code).unwrap();
-          let block = Block::from_intermed_repr(&intermed_code);
+          let file = File::open(target).map_err(|e| e.to_string())?;
+          let block = Block::from_intermed_repr(&mut file.bytes().map(|res| res.unwrap()));
           Ok(block)
         }
       }
@@ -117,10 +112,8 @@ fn main() {
       }
     }
     CommandMode::Exec => {
-      let mut file = File::open(&cli.input).unwrap();
-      let mut intermed_code: Vec<u8> = Vec::new();
-      file.read_to_end(&mut intermed_code).unwrap();
-      let block = Block::from_intermed_repr(&intermed_code);
+      let file = File::open(&cli.input).unwrap();
+      let block = Block::from_intermed_repr(&mut file.bytes().map(|res| res.unwrap()));
       let parent = Rc::new(cli.input.parent().unwrap().to_path_buf());
       match execute(block, includer(parent)) {
         Ok(_) => {}

@@ -1,14 +1,26 @@
 use crate::structs::{Block, QuoteStyle};
 
 /*
-中間表現バイトコードは、以下の繰り返し
+中間表現バイトコードは、
+- バイトコードバージョン [1バイト]
+- ヘッダ長 [4バイト] - 最初から子供情報までのバイト数。
+次に、属性(追加情報)繰り返し：
+- 属性名長 [2バイト]
+- 属性名 [*]
+- 属性 [?]
+その後、以下の繰り返し
 子供は、深さ優先で並べて記述 (先頭の子ほど早く記述される)
-- ブロック種類
-- プロシージャ名長さ
-- プロシージャ名
-- 子供ブロックの数
-- 子が@かどうか[子供の数]
+- ブロック種類 [1バイト]
+- プロシージャ名長さ [4バイト]
+- プロシージャ名 [*]
+- 子供ブロックの数 [1バイト]
+- 子が@かどうか [*]
 */
+#[repr(u8)]
+enum ByteCodeVersion {
+  V2_1 = 0x1,
+}
+
 #[repr(u8)]
 enum ArgPlugType {
   // ふつう
@@ -31,6 +43,11 @@ impl Block {
   pub fn to_intermed_repr(&self) -> Vec<u8> {
     // 生成された中間表現
     let mut ret: Vec<u8> = Vec::new();
+
+    // バージョン
+    ret.push(ByteCodeVersion::V2_1 as u8);
+    // ヘッダ長
+    ret.extend((1 + 4_u32).to_be_bytes());
 
     let mut stack = vec![self];
 
@@ -64,27 +81,24 @@ impl Block {
   }
 
   // 一旦これで。そのうちブロックに戻さずに実行できるようにする。
-  pub fn from_intermed_repr(code: &[u8]) -> Block {
-    let mut index = 0;
+  pub fn from_intermed_repr(code: &mut impl Iterator<Item = u8>) -> Block {
     let mut stack: Vec<(Block, usize)> = Vec::new();
 
+    let _version = code.next().expect("Expected Version");
+    let header_len = Self::read_u32(code);
+    let _remain_header = code.take((header_len - 5) as usize);
+
     // 最初のルートブロックを読み込む
-    let quote = match code[index] {
+    let quote = match code.next().expect("Expected BlockType") {
       x if x == BlockType::Normal as u8 => QuoteStyle::None,
       x if x == BlockType::Quote as u8 => QuoteStyle::Quote,
       x if x == BlockType::Closure as u8 => QuoteStyle::Closure,
       x => panic!("Unknown BlockType value {}", x),
     };
-    index += 1;
 
-    let proc_name_len = u32::from_be_bytes([code[index], code[index + 1], code[index + 2], code[index + 3]]) as usize;
-    index += 4;
-
-    let proc_name = String::from_utf8(code[index..index + proc_name_len].to_vec()).expect("Invalid UTF-8 sequence");
-    index += proc_name_len;
-
-    let arg_count = code[index] as usize;
-    index += 1;
+    let proc_name_len = Self::read_u32(code) as usize;
+    let proc_name = Self::read_string(code, proc_name_len);
+    let arg_count = code.next().expect("Expected argument count") as usize;
 
     let root_block = Block {
       quote,
@@ -98,19 +112,18 @@ impl Block {
     // 引数タイプを読み取る
     let mut arg_types = Vec::new();
     for _ in 0..arg_count {
-      let expand = match code[index] {
+      let expand = match code.next().expect("Expected ArgPlugType") {
         x if x == ArgPlugType::Expand as u8 => true,
         x if x == ArgPlugType::Normal as u8 => false,
-        x => panic!("Unknown ArgPlugType {}", x),
+        x => panic!("Unknown ArgPlugType"),
       };
       arg_types.push(expand);
-      index += 1;
     }
     arg_types.reverse();
 
     // 子ブロックを再構築する
     stack.push((root_block, arg_count));
-    while let Some((parent_block, remaining_args)) = stack.pop() {
+    while let Some((mut parent_block, remaining_args)) = stack.pop() {
       if remaining_args == 0 {
         // 親ブロックが引数をすべて処理したら上位ブロックに戻る
         if let Some((upper_block, _)) = stack.last_mut() {
@@ -123,22 +136,16 @@ impl Block {
       }
 
       // 引数の処理をする
-      let quote = match code[index] {
+      let quote = match code.next().expect("Expected BlockType") {
         x if x == BlockType::Normal as u8 => QuoteStyle::None,
         x if x == BlockType::Quote as u8 => QuoteStyle::Quote,
         x if x == BlockType::Closure as u8 => QuoteStyle::Closure,
-        x => panic!("Unknown BlockType [{}] = {}", index, x),
+        x => panic!("Unknown BlockType"),
       };
-      index += 1;
 
-      let proc_name_len = u32::from_be_bytes([code[index], code[index + 1], code[index + 2], code[index + 3]]) as usize;
-      index += 4;
-
-      let proc_name = String::from_utf8(code[index..index + proc_name_len].to_vec()).expect("Invalid UTF-8 sequence");
-      index += proc_name_len;
-
-      let arg_count = code[index] as usize;
-      index += 1;
+      let proc_name_len = Self::read_u32(code) as usize;
+      let proc_name = Self::read_string(code, proc_name_len);
+      let arg_count = code.next().expect("Expected argument count") as usize;
 
       let child_block = Block {
         quote,
@@ -149,13 +156,12 @@ impl Block {
       // 引数タイプを読み取る
       let mut tmp_arg_types = Vec::with_capacity(arg_count);
       for _ in 0..arg_count {
-        let expand = match code[index] {
+        let expand = match code.next().expect("Expected ArgPlugType") {
           x if x == ArgPlugType::Expand as u8 => true,
           x if x == ArgPlugType::Normal as u8 => false,
           x => panic!("Unknown ArgPlugType {}", x),
         };
         tmp_arg_types.push(expand);
-        index += 1;
       }
       arg_types.extend(tmp_arg_types.iter().rev());
 
@@ -173,6 +179,23 @@ impl Block {
 
     last_root_block.unwrap()
   }
+
+  // Helper function to read a u32 from the iterator
+  fn read_u32(code: &mut impl Iterator<Item = u8>) -> u32 {
+    let bytes: [u8; 4] = [
+      code.next().expect("Expected byte 1"),
+      code.next().expect("Expected byte 2"),
+      code.next().expect("Expected byte 3"),
+      code.next().expect("Expected byte 4"),
+    ];
+    u32::from_be_bytes(bytes)
+  }
+
+  // Helper function to read a string from the iterator
+  fn read_string(code: &mut impl Iterator<Item = u8>, len: usize) -> String {
+    let bytes: Vec<u8> = code.take(len).collect();
+    String::from_utf8(bytes).expect("Invalid UTF-8 sequence")
+  }
 }
 
 #[cfg(test)]
@@ -189,12 +212,24 @@ mod tests {
 
     let im = block.to_intermed_repr();
 
-    assert_eq!(im, vec![1, 0, 0, 0, 4, 97, 97, 97, 97, 0]);
+    assert_eq!(
+      im,
+      vec![
+        1, 0, 0, 0, 5, // ヘッダ
+        1, 0, 0, 0, 4, 97, 97, 97, 97, 0
+      ]
+    );
   }
 
   #[test]
   fn intermediate_to_one_block() {
-    let block = Block::from_intermed_repr(&[1, 0, 0, 0, 4, 97, 97, 97, 97, 0]);
+    let block = Block::from_intermed_repr(
+      &mut [
+        1, 0, 0, 0, 5, // ヘッダ
+        1, 0, 0, 0, 4, 97, 97, 97, 97, 0,
+      ]
+      .into_iter(),
+    );
 
     assert_eq!(
       block,
@@ -243,6 +278,7 @@ mod tests {
     assert_eq!(
       im,
       vec![
+        1, 0, 0, 0, 5, // ヘッダ
         1, 0, 0, 0, 1, 97, 2, 1, 0, // type="normal",  name_len=1, name="a", child=2, @, not @,
         1, 0, 0, 0, 1, 98, 1, 0, // type="normal", name_len=1, name="b", child=1, not @,
         2, 0, 0, 0, 1, 99, 0, //  type="quote", name_len=1, name="c",  child=0,
@@ -253,12 +289,16 @@ mod tests {
 
   #[test]
   fn intermediate_to_nest_block() {
-    let block = Block::from_intermed_repr(&[
-      1, 0, 0, 0, 1, 97, 2, 1, 0, // type="normal",  name_len=1, name="a", child=2, @, not @,
-      1, 0, 0, 0, 1, 98, 1, 0, // type="normal", name_len=1, name="b", child=1, not @,
-      2, 0, 0, 0, 1, 99, 0, //  type="quote", name_len=1, name="c",  child=0,
-      3, 0, 0, 0, 1, 100, 0, // type="closure",  name_len=1, name="d", child=0,
-    ]);
+    let block = Block::from_intermed_repr(
+      &mut [
+        1, 0, 0, 0, 5, // ヘッダ
+        1, 0, 0, 0, 1, 97, 2, 1, 0, // type="normal",  name_len=1, name="a", child=2, @, not @,
+        1, 0, 0, 0, 1, 98, 1, 0, // type="normal", name_len=1, name="b", child=1, not @,
+        2, 0, 0, 0, 1, 99, 0, //  type="quote", name_len=1, name="c",  child=0,
+        3, 0, 0, 0, 1, 100, 0, // type="closure",  name_len=1, name="d", child=0,
+      ]
+      .into_iter(),
+    );
 
     assert_eq!(
       block,

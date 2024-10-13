@@ -1,4 +1,4 @@
-use compile::compile;
+use compile::{compile, CompileConfig};
 use executor::execute;
 use std::{
   fs::File,
@@ -29,7 +29,22 @@ struct Cli {
   #[arg(short, long, value_enum, default_value_t=CommandMode::Auto)]
   mode: CommandMode,
 
+  #[arg(short, long, value_enum, default_value_t=CharWidthMode::Mono)]
+  char_width: CharWidthMode,
+
   input: PathBuf,
+}
+
+impl Cli {
+  fn create_compile_config(&self) -> CompileConfig {
+    CompileConfig {
+      char_width: match self.char_width {
+        CharWidthMode::Mono => crate::compile::CharWidthMode::Mono,
+        CharWidthMode::Half => crate::compile::CharWidthMode::Half,
+        CharWidthMode::Full => crate::compile::CharWidthMode::Full,
+      },
+    }
+  }
 }
 
 #[derive(Clone, PartialEq, Eq, ValueEnum)]
@@ -44,10 +59,22 @@ enum CommandMode {
   ExecD,
 }
 
+#[derive(Clone, PartialEq, Eq, ValueEnum)]
+enum CharWidthMode {
+  // 全部長さ1
+  Mono,
+  // Ambiguousなものは半角
+  Half,
+  // Ambiguousなものは全角
+  Full,
+}
+
 fn main() {
   let cli = Cli::parse();
 
-  let mut cmd_mode = cli.mode;
+  let mut cmd_mode = cli.mode.clone();
+
+  let compile_config = cli.create_compile_config();
 
   if cmd_mode == CommandMode::Auto {
     if cli.input.is_dir() {
@@ -69,6 +96,7 @@ fn main() {
     }
   }
 
+  let copy_config = compile_config.clone();
   //Includer を設定
   let includer = |parent: Rc<PathBuf>| {
     Box::new(move |name: &Vec<String>| {
@@ -76,7 +104,7 @@ fn main() {
       match target.extension() {
         Some(ext) => {
           if ext == "tr" {
-            compile_file(&target)
+            compile_file(&target, &copy_config)
           } else {
             // 中間コード
             let file = File::open(target).map_err(|e| e.to_string())?;
@@ -101,13 +129,13 @@ fn main() {
         for path in WalkDir::new(cli.input).into_iter().filter_map(|e| e.ok()).filter(|e| e.file_type().is_file()) {
           if let Some(ext) = path.path().extension() {
             if ext == "tr" {
-              if let Err(err) = write_compiled_file(path.path()) {
+              if let Err(err) = write_compiled_file(path.path(), &compile_config) {
                 eprintln!("Error in {}: {}", path.path().to_str().unwrap_or("?"), err)
               }
             }
           }
         }
-      } else if let Err(err) = write_compiled_file(&cli.input) {
+      } else if let Err(err) = write_compiled_file(&cli.input, &compile_config) {
         eprintln!("Error in {}: {}", cli.input.to_str().unwrap_or("?"), err)
       }
     }
@@ -121,7 +149,7 @@ fn main() {
       };
     }
     CommandMode::ExecD => {
-      let block = compile_file(cli.input.as_path()).unwrap();
+      let block = compile_file(cli.input.as_path(), &compile_config).unwrap();
       let parent = Rc::new(cli.input.parent().unwrap().to_path_buf());
       match execute(block, includer(parent)) {
         Ok(_) => {}
@@ -131,16 +159,16 @@ fn main() {
   }
 }
 
-fn compile_file(file_path: &Path) -> Result<Block, String> {
+fn compile_file(file_path: &Path, config: &CompileConfig) -> Result<Block, String> {
   let mut codes = File::open(file_path).map_err(|err| format!("failed to read {:?}: {}", &file_path.to_str(), err))?;
   let mut buf: String = String::new();
   codes.read_to_string(&mut buf).map_err(|err| format!("failed to read {:?}: {}", &file_path.to_str(), err))?;
 
-  compile(buf.split('\n').map(|t| t.to_owned()).collect())
+  compile(buf.split('\n').map(|t| t.to_owned()).collect(), config)
 }
 
-fn write_compiled_file(path: &Path) -> Result<(), String> {
-  let block = compile_file(path)?;
+fn write_compiled_file(path: &Path, config: &CompileConfig) -> Result<(), String> {
+  let block = compile_file(path, config)?;
   let mut output = path.to_path_buf();
   output.set_extension("trm");
   let mut file = File::create(output).map_err(|e| e.to_string())?;
@@ -228,9 +256,10 @@ mod tests {
   use std::{cell::RefCell, rc::Rc};
 
   use crate::{
-    compile,
+    compile::{self, CompileConfig},
     executor::execute_with_mock,
     structs::{BlockError, Literal},
+    CharWidthMode,
   };
 
   #[test]
@@ -242,17 +271,20 @@ mod tests {
     });
     let cmd_executor = Box::new(|_, _| panic!());
 
-    let result = compile(vec![
-      "        ┌─────┐      ".to_owned(),
-      "        │print│      ".to_owned(),
-      "        └───┬─┘      ".to_owned(),
-      "        ┌───┴─┐      ".to_owned(),
-      "    ┌───┤  +  ├──┐   ".to_owned(),
-      "    │   └─────┘  │   ".to_owned(),
-      "┌───┴─┐      ┌───┴─┐ ".to_owned(),
-      "│  3  │      │  4  │ ".to_owned(),
-      "└─────┘      └─────┘ ".to_owned(),
-    ])
+    let result = compile::compile(
+      vec![
+        "        ┌─────┐      ".to_owned(),
+        "        │print│      ".to_owned(),
+        "        └───┬─┘      ".to_owned(),
+        "        ┌───┴─┐      ".to_owned(),
+        "    ┌───┤  +  ├──┐   ".to_owned(),
+        "    │   └─────┘  │   ".to_owned(),
+        "┌───┴─┐      ┌───┴─┐ ".to_owned(),
+        "│  3  │      │  4  │ ".to_owned(),
+        "└─────┘      └─────┘ ".to_owned(),
+      ],
+      &CompileConfig::DEFAULT,
+    )
     .and_then(|b| {
       execute_with_mock(
         b,
@@ -269,6 +301,13 @@ mod tests {
   }
 
   fn exec_file(code: &str) -> (Result<Literal, String>, String, Vec<(String, Vec<String>)>) {
+    exec_file_with_config(code, &CompileConfig::DEFAULT)
+  }
+
+  fn exec_file_with_config(
+    code: &str,
+    config: &CompileConfig,
+  ) -> (Result<Literal, String>, String, Vec<(String, Vec<String>)>) {
     let out = Rc::new(RefCell::new("".to_owned()));
     let out_ref = out.clone();
     let out_stream = Box::new(move |msg| {
@@ -282,7 +321,7 @@ mod tests {
     });
 
     let code_lines: Vec<String> = code.split('\n').map(|c| c.to_owned()).collect();
-    let result = compile(code_lines).and_then(|b| {
+    let result = compile::compile(code_lines, config).and_then(|b| {
       execute_with_mock(
         b,
         Box::new(|| panic!()),
@@ -409,6 +448,24 @@ mod tests {
     let (r, o, _) = exec_file(include_str!("test/secret_for.tr"));
     assert_eq!(r, Ok(Literal::Void));
     assert_eq!(o, "42\n");
+  }
+
+  #[test]
+  fn char_half() {
+    let mut config = CompileConfig::DEFAULT.clone();
+    config.char_width = crate::compile::CharWidthMode::Half;
+    let (r, o, _) = exec_file_with_config(include_str!("test/helloworld_half.tr"), &config);
+    assert_eq!(r, Ok(Literal::Void));
+    assert_eq!(o, "こんにちは！世界！\n");
+  }
+
+  #[test]
+  fn char_full() {
+    let mut config = CompileConfig::DEFAULT.clone();
+    config.char_width = crate::compile::CharWidthMode::Full;
+    let (r, o, _) = exec_file_with_config(include_str!("test/helloworld_full.tr"), &config);
+    assert_eq!(r, Ok(Literal::Void));
+    assert_eq!(o, "こんにちは！世界！\n");
   }
 
   mod modules {

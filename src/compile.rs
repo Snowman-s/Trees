@@ -18,12 +18,6 @@ pub enum CharWidthMode {
   Full,
 }
 
-impl CompileConfig {
-  pub const DEFAULT: CompileConfig = CompileConfig {
-    char_width: CharWidthMode::Mono,
-  };
-}
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct CodeCharacter {
   char: String,
@@ -48,10 +42,10 @@ impl SplitedCode {
     index += 1;
 
     while let Some(cc) = self.body.get(y)?.get(index) {
-      if cc.x == x_max_exclusive {
-        break;
-      } else if cc.x > x_max_exclusive {
-        return None;
+      match cc.x.cmp(&x_max_exclusive) {
+        Ordering::Equal => break,
+        Ordering::Greater => return None,
+        Ordering::Less => {}
       }
       return_str += &cc.char;
 
@@ -154,7 +148,7 @@ enum Orientation {
 }
 
 impl CompilingBlock {
-  fn to_block(&self, blocks: &Vec<CompilingBlock>) -> Block {
+  fn to_block(&self, blocks: &[CompilingBlock]) -> Block {
     Block {
       proc_name: self.proc_name.clone(),
       args: self
@@ -404,8 +398,9 @@ fn find_next_edge(code: &SplitedCode, x: &usize, y: &usize, ori: &Orientation) -
   }
 }
 
-fn connect_blocks(code: &SplitedCode, blocks: &Vec<CompilingBlock>, _config: &CompileConfig) -> Result<Block, String> {
-  let mut blocks_clone = blocks.clone();
+fn connect_blocks(code: &SplitedCode, blocks: &mut [CompilingBlock], _config: &CompileConfig) -> Result<Block, String> {
+  let blocks_cloned = blocks.to_owned();
+
   let head_candinates: Vec<usize> = blocks
     .iter()
     .enumerate()
@@ -420,7 +415,7 @@ fn connect_blocks(code: &SplitedCode, blocks: &Vec<CompilingBlock>, _config: &Co
   }
   let head = head_candinates[0];
 
-  for block in blocks_clone.iter_mut() {
+  for block in blocks.iter_mut() {
     for ArgPlug { x, y, expand, ori } in block.arg_plugs.iter() {
       let mut mut_x = *x;
       let mut mut_y = *y;
@@ -441,7 +436,7 @@ fn connect_blocks(code: &SplitedCode, blocks: &Vec<CompilingBlock>, _config: &Co
         }
       }
 
-      let (index, _) = blocks
+      let (index, _) = blocks_cloned
         .iter()
         .enumerate()
         .find(|(_, b)| {
@@ -457,7 +452,7 @@ fn connect_blocks(code: &SplitedCode, blocks: &Vec<CompilingBlock>, _config: &Co
     }
   }
 
-  Ok(blocks_clone[head].to_block(&blocks_clone.clone()))
+  Ok(blocks[head].to_block(blocks))
 }
 
 fn split_code(code: &Vec<String>, config: &CompileConfig) -> SplitedCode {
@@ -479,9 +474,9 @@ fn split_code(code: &Vec<String>, config: &CompileConfig) -> SplitedCode {
 pub fn compile(code: Vec<String>, config: &CompileConfig) -> Result<Block, String> {
   let splited_code = split_code(&code, config);
 
-  let blocks = find_blocks(&splited_code, config);
+  let mut blocks = find_blocks(&splited_code, config);
 
-  connect_blocks(&splited_code, &blocks, config)
+  connect_blocks(&splited_code, &mut blocks, config)
 }
 
 #[cfg(test)]
@@ -492,10 +487,15 @@ mod tests {
       SplitedCode,
     },
     structs::{Block, QuoteStyle},
-    CharWidthMode,
   };
 
-  use super::{compile, split_code};
+  use super::{compile, split_code, CharWidthMode};
+
+  impl CompileConfig {
+    pub const DEFAULT: CompileConfig = CompileConfig {
+      char_width: CharWidthMode::Mono,
+    };
+  }
 
   #[test]
   fn test_split_code() {

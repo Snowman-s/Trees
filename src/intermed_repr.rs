@@ -115,7 +115,7 @@ impl Block {
       let expand = match code.next().expect("Expected ArgPlugType") {
         x if x == ArgPlugType::Expand as u8 => true,
         x if x == ArgPlugType::Normal as u8 => false,
-        x => panic!("Unknown ArgPlugType"),
+        _ => panic!("Unknown ArgPlugType"),
       };
       arg_types.push(expand);
     }
@@ -123,7 +123,7 @@ impl Block {
 
     // 子ブロックを再構築する
     stack.push((root_block, arg_count));
-    while let Some((mut parent_block, remaining_args)) = stack.pop() {
+    while let Some((parent_block, remaining_args)) = stack.pop() {
       if remaining_args == 0 {
         // 親ブロックが引数をすべて処理したら上位ブロックに戻る
         if let Some((upper_block, _)) = stack.last_mut() {
@@ -140,7 +140,7 @@ impl Block {
         x if x == BlockType::Normal as u8 => QuoteStyle::None,
         x if x == BlockType::Quote as u8 => QuoteStyle::Quote,
         x if x == BlockType::Closure as u8 => QuoteStyle::Closure,
-        x => panic!("Unknown BlockType"),
+        _ => panic!("Unknown BlockType"),
       };
 
       let proc_name_len = Self::read_u32(code) as usize;

@@ -121,10 +121,10 @@ impl ExecuteEnv {
     self.get_last_scopes().iter().rev().find_map(|scope| scope.borrow().namespace.get(name).cloned())
   }
 
-  pub fn defset_args(&mut self, args: &Vec<Literal>) {
+  pub fn defset_args(&mut self, args: &[Literal]) {
     let binding = self.get_last_scope();
     let namespace = &mut binding.borrow_mut().namespace;
-    namespace.insert("$args".to_string(), ProcedureOrVar::Var(Literal::List(args.clone())));
+    namespace.insert("$args".to_string(), ProcedureOrVar::Var(Literal::List(args.to_vec())));
     for (i, arg) in args.iter().enumerate() {
       namespace.insert(format!("${}", i), ProcedureOrVar::Var(arg.clone()));
     }
@@ -225,7 +225,6 @@ impl ExecuteEnv {
   }
 
   pub fn reexport(&mut self) {
-    let scope_len = self.scopes.len();
     for (key, proc_or_var) in self.get_last_scope().borrow().namespace.clone().iter() {
       self.get_upper_scope().borrow_mut().namespace.insert(key.clone(), proc_or_var.clone());
       if let Some(exp_scope) = self.get_upper2_scope() {

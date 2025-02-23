@@ -259,7 +259,6 @@ mod tests {
     compile::{self, CompileConfig},
     executor::execute_with_mock,
     structs::{BlockError, Literal},
-    CharWidthMode,
   };
 
   #[test]
@@ -300,20 +299,26 @@ mod tests {
     assert_eq!("7", *out_ref.borrow());
   }
 
-  fn exec_file(code: &str) -> (Result<Literal, String>, String, Vec<(String, Vec<String>)>) {
+  type Returning = Result<Literal, String>;
+  type StdoutResult = String;
+  type RequiredCommands = Vec<(String, Vec<String>)>;
+  struct ExectuedResult {
+    returning: Returning,
+    stdout: StdoutResult,
+    cmd: RequiredCommands,
+  }
+
+  fn exec_file(code: &str) -> ExectuedResult {
     exec_file_with_config(code, &CompileConfig::DEFAULT)
   }
 
-  fn exec_file_with_config(
-    code: &str,
-    config: &CompileConfig,
-  ) -> (Result<Literal, String>, String, Vec<(String, Vec<String>)>) {
+  fn exec_file_with_config(code: &str, config: &CompileConfig) -> ExectuedResult {
     let out = Rc::new(RefCell::new("".to_owned()));
     let out_ref = out.clone();
     let out_stream = Box::new(move |msg| {
       (*out.borrow_mut()).extend([msg]);
     });
-    let cmd_log: Rc<RefCell<Vec<(String, Vec<String>)>>> = Rc::new(RefCell::new(vec![]));
+    let cmd_log: Rc<RefCell<RequiredCommands>> = Rc::new(RefCell::new(vec![]));
     let cmd_log_ref = cmd_log.clone();
     let cmd_executor = Box::new(move |cmd, args| {
       (*cmd_log.borrow_mut()).push((cmd, args));
@@ -321,7 +326,7 @@ mod tests {
     });
 
     let code_lines: Vec<String> = code.split('\n').map(|c| c.to_owned()).collect();
-    let result = compile::compile(code_lines, config).and_then(|b| {
+    let returning = compile::compile(code_lines, config).and_then(|b| {
       execute_with_mock(
         b,
         Box::new(|| panic!()),
@@ -332,178 +337,186 @@ mod tests {
       .map_err(|e: BlockError| e.msg)
     });
 
-    let out = out_ref.borrow().clone();
+    let stdout = out_ref.borrow().clone();
     let cmd = cmd_log_ref.borrow().clone();
-    (result, out, cmd)
+
+    ExectuedResult { returning, stdout, cmd }
   }
 
   #[test]
   fn minus() {
-    let (r, o, _) = exec_file(include_str!("test/minus.tr"));
-    assert_eq!(r, Ok(Literal::Void));
-    assert_eq!(o, "-1\n");
+    let ExectuedResult { returning, stdout, .. } = exec_file(include_str!("test/minus.tr"));
+    assert_eq!(returning, Ok(Literal::Void));
+    assert_eq!(stdout, "-1\n");
   }
 
   #[test]
   fn println() {
-    let (r, o, _) = exec_file(include_str!("test/println.tr"));
-    assert_eq!(r, Ok(Literal::Void));
-    assert_eq!(o, "7\n");
+    let ExectuedResult { returning, stdout, .. } = exec_file(include_str!("test/println.tr"));
+    assert_eq!(returning, Ok(Literal::Void));
+    assert_eq!(stdout, "7\n");
   }
 
   #[test]
   fn fizzbuzz() {
-    let (r, o, _) = exec_file(include_str!("test/fizzbuzz.tr"));
-    assert_eq!(r, Ok(Literal::Void));
-    assert_eq!(o, "12Fizz4BuzzFizz78FizzBuzz11Fizz1314FizzBuzz");
+    let ExectuedResult { returning, stdout, .. } = exec_file(include_str!("test/fizzbuzz.tr"));
+    assert_eq!(returning, Ok(Literal::Void));
+    assert_eq!(stdout, "12Fizz4BuzzFizz78FizzBuzz11Fizz1314FizzBuzz");
   }
 
   #[test]
   fn defproc() {
-    let (r, o, _) = exec_file(include_str!("test/defproc.tr"));
-    assert_eq!(r, Ok(Literal::Void));
-    assert_eq!(o, "6");
+    let ExectuedResult { returning, stdout, .. } = exec_file(include_str!("test/defproc.tr"));
+    assert_eq!(returning, Ok(Literal::Void));
+    assert_eq!(stdout, "6");
   }
 
   #[test]
   fn substance() {
-    let (r, o, _) = exec_file(include_str!("test/substance.tr"));
-    assert_eq!(r, Ok(Literal::Void));
-    assert_eq!(o, "6");
+    let ExectuedResult { returning, stdout, .. } = exec_file(include_str!("test/substance.tr"));
+    assert_eq!(returning, Ok(Literal::Void));
+    assert_eq!(stdout, "6");
   }
 
   #[test]
   fn bind_var() {
-    let (r, o, _) = exec_file(include_str!("test/bind_var.tr"));
-    assert_eq!(r, Ok(Literal::Void));
-    assert_eq!(o, "42");
+    let ExectuedResult { returning, stdout, .. } = exec_file(include_str!("test/bind_var.tr"));
+    assert_eq!(returning, Ok(Literal::Void));
+    assert_eq!(stdout, "42");
   }
 
   #[test]
   fn bind_var2() {
-    let (r, o, _) = exec_file(include_str!("test/bind_var2.tr"));
-    assert_eq!(r, Ok(Literal::Void));
-    assert_eq!(o, "42");
+    let ExectuedResult { returning, stdout, .. } = exec_file(include_str!("test/bind_var2.tr"));
+    assert_eq!(returning, Ok(Literal::Void));
+    assert_eq!(stdout, "42");
   }
 
   #[test]
   fn bind_var3() {
-    let (r, o, _) = exec_file(include_str!("test/bind_var3.tr"));
-    assert_eq!(r, Ok(Literal::Void));
-    assert_eq!(o, "42");
+    let ExectuedResult { returning, stdout, .. } = exec_file(include_str!("test/bind_var3.tr"));
+    assert_eq!(returning, Ok(Literal::Void));
+    assert_eq!(stdout, "42");
   }
 
   #[test]
   fn generator() {
-    let (r, o, _) = exec_file(include_str!("test/generator.tr"));
-    assert_eq!(r, Ok(Literal::Void));
-    assert_eq!(o, "12");
+    let ExectuedResult { returning, stdout, .. } = exec_file(include_str!("test/generator.tr"));
+    assert_eq!(returning, Ok(Literal::Void));
+    assert_eq!(stdout, "12");
   }
 
   #[test]
   fn cmd() {
-    let (r, o, cmd) = exec_file(include_str!("test/cmd.tr"));
-    assert_eq!(r, Ok(Literal::String("".to_string())));
-    assert_eq!(o, "");
+    let ExectuedResult {
+      returning, stdout, cmd, ..
+    } = exec_file(include_str!("test/cmd.tr"));
+    assert_eq!(returning, Ok(Literal::String("".to_string())));
+    assert_eq!(stdout, "");
     assert_eq!(cmd, vec![("echo".to_string(), vec!["out".to_string()])]);
   }
 
   #[test]
   fn lists() {
-    let (r, o, _) = exec_file(include_str!("test/lists.tr"));
-    assert_eq!(r, Ok(Literal::Int(7)));
-    assert_eq!(o, "");
+    let ExectuedResult { returning, stdout, .. } = exec_file(include_str!("test/lists.tr"));
+    assert_eq!(returning, Ok(Literal::Int(7)));
+    assert_eq!(stdout, "");
   }
 
   #[test]
   fn string_bytes() {
-    let (r, o, _) = exec_file(include_str!("test/string_bytes.tr"));
-    assert_eq!(r, Ok(Literal::Void));
-    assert_eq!(o, "AAA\n");
+    let ExectuedResult { returning, stdout, .. } = exec_file(include_str!("test/string_bytes.tr"));
+    assert_eq!(returning, Ok(Literal::Void));
+    assert_eq!(stdout, "AAA\n");
   }
 
   #[test]
   fn recursion() {
-    let (r, o, _) = exec_file(include_str!("test/recursion.tr"));
-    assert_eq!(r, Ok(Literal::Void));
-    assert_eq!(o, "6\n");
+    let ExectuedResult { returning, stdout, .. } = exec_file(include_str!("test/recursion.tr"));
+    assert_eq!(returning, Ok(Literal::Void));
+    assert_eq!(stdout, "6\n");
   }
 
   #[test]
   fn recursion2() {
-    let (r, o, _) = exec_file(include_str!("test/recursion2.tr"));
-    assert_eq!(r, Ok(Literal::Void));
-    assert_eq!(o, "6\n");
+    let ExectuedResult { returning, stdout, .. } = exec_file(include_str!("test/recursion2.tr"));
+    assert_eq!(returning, Ok(Literal::Void));
+    assert_eq!(stdout, "6\n");
   }
 
   #[test]
   fn tr_while() {
-    let (r, o, _) = exec_file(include_str!("test/tr_while.tr"));
-    assert_eq!(r, Ok(Literal::Void));
-    assert_eq!(o, "012");
+    let ExectuedResult { returning, stdout, .. } = exec_file(include_str!("test/tr_while.tr"));
+    assert_eq!(returning, Ok(Literal::Void));
+    assert_eq!(stdout, "012");
   }
 
   #[test]
   fn secret_for() {
-    let (r, o, _) = exec_file(include_str!("test/secret_for.tr"));
-    assert_eq!(r, Ok(Literal::Void));
-    assert_eq!(o, "42\n");
+    let ExectuedResult { returning, stdout, .. } = exec_file(include_str!("test/secret_for.tr"));
+    assert_eq!(returning, Ok(Literal::Void));
+    assert_eq!(stdout, "42\n");
   }
 
   #[test]
   fn char_half() {
     let mut config = CompileConfig::DEFAULT.clone();
     config.char_width = crate::compile::CharWidthMode::Half;
-    let (r, o, _) = exec_file_with_config(include_str!("test/helloworld_half.tr"), &config);
-    assert_eq!(r, Ok(Literal::Void));
-    assert_eq!(o, "こんにちは！世界！\n");
+    let ExectuedResult { returning, stdout, .. } =
+      exec_file_with_config(include_str!("test/helloworld_half.tr"), &config);
+    assert_eq!(returning, Ok(Literal::Void));
+    assert_eq!(stdout, "こんにちは！世界！\n");
   }
 
   #[test]
   fn char_full() {
     let mut config = CompileConfig::DEFAULT.clone();
     config.char_width = crate::compile::CharWidthMode::Full;
-    let (r, o, _) = exec_file_with_config(include_str!("test/helloworld_full.tr"), &config);
-    assert_eq!(r, Ok(Literal::Void));
-    assert_eq!(o, "こんにちは！世界！\n");
+    let ExectuedResult { returning, stdout, .. } =
+      exec_file_with_config(include_str!("test/helloworld_full.tr"), &config);
+    assert_eq!(returning, Ok(Literal::Void));
+    assert_eq!(stdout, "こんにちは！世界！\n");
   }
 
   mod modules {
-    use crate::{structs::Literal, tests::exec_file};
+    use crate::{
+      structs::Literal,
+      tests::{exec_file, ExectuedResult},
+    };
 
     #[test]
     fn modules() {
-      let (r, o, _) = exec_file(include_str!("test/modules/modules.tr"));
-      assert_eq!(r, Ok(Literal::Void));
-      assert_eq!(o, "6");
+      let ExectuedResult { returning, stdout, .. } = exec_file(include_str!("test/modules/modules.tr"));
+      assert_eq!(returning, Ok(Literal::Void));
+      assert_eq!(stdout, "6");
     }
 
     #[test]
     fn modules_err() {
-      let (r, o, _) = exec_file(include_str!("test/modules/modules_err.tr"));
-      assert!(r.is_err());
-      assert_eq!(o, "");
+      let ExectuedResult { returning, stdout, .. } = exec_file(include_str!("test/modules/modules_err.tr"));
+      assert!(returning.is_err());
+      assert_eq!(stdout, "");
     }
 
     #[test]
     fn reexport() {
-      let (r, o, _) = exec_file(include_str!("test/modules/reexport.tr"));
-      assert_eq!(r, Ok(Literal::Void));
-      assert_eq!(o, "12");
+      let ExectuedResult { returning, stdout, .. } = exec_file(include_str!("test/modules/reexport.tr"));
+      assert_eq!(returning, Ok(Literal::Void));
+      assert_eq!(stdout, "12");
     }
 
     #[test]
     fn tereport_var() {
-      let (r, o, _) = exec_file(include_str!("test/modules/tereport_var.tr"));
-      assert_eq!(r, Ok(Literal::Void));
-      assert_eq!(o, "42");
+      let ExectuedResult { returning, stdout, .. } = exec_file(include_str!("test/modules/tereport_var.tr"));
+      assert_eq!(returning, Ok(Literal::Void));
+      assert_eq!(stdout, "42");
     }
 
     #[test]
     fn tereport_var_2times() {
-      let (r, o, _) = exec_file(include_str!("test/modules/tereport_var_2times.tr"));
-      assert_eq!(r, Ok(Literal::Void));
-      assert_eq!(o, "42");
+      let ExectuedResult { returning, stdout, .. } = exec_file(include_str!("test/modules/tereport_var_2times.tr"));
+      assert_eq!(returning, Ok(Literal::Void));
+      assert_eq!(stdout, "42");
     }
   }
 }

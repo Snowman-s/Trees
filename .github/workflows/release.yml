@@ -49,24 +49,21 @@ jobs:
           FILE_PATH: target/x86_64-pc-windows-msvc/release/trees.exe
           FILE_NAME: trees-x86_64-pc-windows-msvc.exe
         run: |
-          echo "Checking for existing asset: $FILE_NAME"
+          echo Checking for existing asset: ${{ env.FILE_NAME }}
 
-          ASSETS_JSON=$(curl -s \
-            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
-            -H "Accept: application/vnd.github+json" \
-            "https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}/assets")
+          REM アセット一覧を取得
+          SET ASSETS_JSON= curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" -H "Accept: application/vnd.github+json" https://api.github.com/repos/${{ github.repository }}/releases/${{ env.RELEASE_ID }}/assets
 
-          ASSET_ID=$(echo "$ASSETS_JSON" | jq -r --arg FILE_NAME "$FILE_NAME" '.[] | select(.name == $FILE_NAME) | .id')
+          REM 同名ファイルのIDを取得
+          FOR /F "tokens=*" %%A IN ('echo %ASSETS_JSON% ^| jq -r --arg FILE_NAME "%FILE_NAME%" ".[] | select(.name == $FILE_NAME) | .id"') DO SET ASSET_ID=%%A
 
-          if [ -n "$ASSET_ID" ]; then
-            echo "Existing asset found (ID: $ASSET_ID), deleting..."
-            curl -X DELETE \
-              -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
-              "https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/assets/${ASSET_ID}"
-            echo "Deleted asset."
-          else
-            echo "No existing asset to delete."
-          fi
+          IF NOT "%ASSET_ID%"=="" (
+            echo Existing asset found (ID: %ASSET_ID%), deleting...
+            curl -X DELETE -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" https://api.github.com/repos/${{ github.repository }}/releases/assets/%ASSET_ID%
+            echo Deleted asset.
+          ) ELSE (
+            echo No existing asset to delete.
+          )
 
       - name: Upload new artifact
         env:
@@ -74,10 +71,6 @@ jobs:
           FILE_PATH: target/x86_64-pc-windows-msvc/release/trees.exe
           FILE_NAME: trees-x86_64-pc-windows-msvc.exe
         run: |
-          echo "Uploading new artifact: $FILE_NAME"
+          echo Uploading new artifact: ${{ env.FILE_NAME }}
 
-          curl -X POST \
-            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
-            -H "Content-Type: application/zip" \
-            --data-binary @"$FILE_PATH" \
-            "https://uploads.github.com/repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}/assets?name=${FILE_NAME}"
+          curl -X POST -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" -H "Content-Type: application/exe" --data-binary @"${{ env.FILE_PATH }}" "https://uploads.github.com/repos/${{ github.repository }}/releases/${{ env.RELEASE_ID }}/assets?name=${{ env.FILE_NAME }}"          

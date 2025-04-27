@@ -66,12 +66,11 @@ jobs:
 
       - name: Upload new artifact
         env:
-          RELEASE_ID: ここにリリースIDを書く
-          FILE_PATH: path\to\your\artifact.zip
-          FILE_NAME: artifact.zip
+          RELEASE_ID: ${{ steps.release-notes.outputs.id }}
+          FILE_NAME: trees-x86_64-pc-windows-msvc.exe
+          FILE_PATH: target/x86_64-pc-windows-msvc/release/trees.exe
         run: |
           Write-Host "Uploading new artifact: $env:FILE_NAME"
 
           # ファイルをバイナリとして読み込み、--data-binary に渡す
-          $fileContent = Get-Content -Path $env:FILE_PATH -Encoding Byte
-          curl -X POST -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" -H "Content-Type: application/zip" --data-binary $fileContent "https://uploads.github.com/repos/${{ github.repository }}/releases/${{ env.RELEASE_ID }}/assets?name=${{ env.FILE_NAME }}"
+          curl -X POST -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" -H "Content-Type: application/exe" --data-binary @${{ env.FILE_PATH }} "https://uploads.github.com/repos/${{ github.repository }}/releases/${{ env.RELEASE_ID }}/assets?name=${{ env.FILE_NAME }}"

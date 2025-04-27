@@ -36,6 +36,8 @@ jobs:
         uses: release-drafter/release-drafter@v6
         with:
           version: ${{ env.CARGO_VERSION }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build
         run: |

@@ -46,7 +46,6 @@ jobs:
       - name: Delete existing asset if exists
         env:
           RELEASE_ID: ${{ steps.release-notes.outputs.id }}
-          FILE_PATH: target/x86_64-pc-windows-msvc/release/trees.exe
           FILE_NAME: trees-x86_64-pc-windows-msvc.exe
         run: |
           Write-Host "Checking for existing asset: $env:FILE_NAME"
@@ -68,7 +67,7 @@ jobs:
       - name: Upload new artifact
         env:
           RELEASE_ID: ${{ steps.release-notes.outputs.id }}
-          FILE_PATH: target/x86_64-pc-windows-msvc/release/trees.exe
+          FILE_PATH: target\x86_64-pc-windows-msvc\release\trees.exe
           FILE_NAME: trees-x86_64-pc-windows-msvc.exe
         run: |
           Write-Host "Uploading new artifact: $env:FILE_NAME"

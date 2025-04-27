@@ -73,4 +73,4 @@ jobs:
         run: |
           Write-Host "Uploading new artifact: $env:FILE_NAME"
 
-          curl -X POST -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" -H "Content-Type: application/exe" --data-binary @"${{ env.FILE_PATH }}" "https://uploads.github.com/repos/${{ github.repository }}/releases/${{ env.RELEASE_ID }}/assets?name=${{ env.FILE_NAME }}"
+          curl -X POST -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" -H "Content-Type: application/exe" --data-binary "${{ env.FILE_PATH }}" "https://uploads.github.com/repos/${{ github.repository }}/releases/${{ env.RELEASE_ID }}/assets?name=${{ env.FILE_NAME }}"

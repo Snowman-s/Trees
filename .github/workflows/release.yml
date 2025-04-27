@@ -43,10 +43,41 @@ jobs:
         run: |
           cargo build --release --target x86_64-pc-windows-msvc
 
-      - name: Upload Artifact to Release Draft
-        run: |
-          gh release upload --clobber ${{ env.VERSION }} ${{ env.files }}
+      - name: Delete existing asset if exists
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          VERSION: ${{ steps.release-notes.outputs.tag_name }}
-          files: target/x86_64-pc-windows-msvc/release/trees.exe#trees-x86_64-pc-windows-msvc.exe
+          RELEASE_ID: ${{ steps.create_release.outputs.id }}
+          FILE_PATH: target/x86_64-pc-windows-msvc/release/trees.exe
+          FILE_NAME: trees-x86_64-pc-windows-msvc.exe
+        run: |
+          echo "Checking for existing asset: $FILE_NAME"
+
+          ASSETS_JSON=$(curl -s \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}/assets")
+
+          ASSET_ID=$(echo "$ASSETS_JSON" | jq -r --arg FILE_NAME "$FILE_NAME" '.[] | select(.name == $FILE_NAME) | .id')
+
+          if [ -n "$ASSET_ID" ]; then
+            echo "Existing asset found (ID: $ASSET_ID), deleting..."
+            curl -X DELETE \
+              -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+              "https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/assets/${ASSET_ID}"
+            echo "Deleted asset."
+          else
+            echo "No existing asset to delete."
+          fi
+
+      - name: Upload new artifact
+        env:
+          RELEASE_ID: ここにリリースIDを書く
+          FILE_PATH: target/x86_64-pc-windows-msvc/release/trees.exe
+          FILE_NAME: trees-x86_64-pc-windows-msvc.exe
+        run: |
+          echo "Uploading new artifact: $FILE_NAME"
+
+          curl -X POST \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Content-Type: application/zip" \
+            --data-binary @"$FILE_PATH" \
+            "https://uploads.github.com/repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}/assets?name=${FILE_NAME}"

@@ -36,18 +36,15 @@ jobs:
         uses: release-drafter/release-drafter@v6
         with:
           version: ${{ env.CARGO_VERSION }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build
         run: |
           cargo build --release --target x86_64-pc-windows-msvc
 
       - name: Upload Artifact to Release Draft
-        uses: actions/upload-release-asset@v1
+        run: |
+          gh release upload --clobber ${{ env.VERSION }} ${{ env.files }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.release-notes.outputs.upload_url }}
-          asset_path: target/x86_64-pc-windows-msvc/release/trees.exe
-          asset_name: trees-x86_64-pc-windows-msvc.exe
-          asset_content_type: application/octet-stream
+          VERSION: ${{ steps.release-notes.outputs.tag_name }}
+          files: target/x86_64-pc-windows-msvc/release/trees.exe#trees-x86_64-pc-windows-msvc.exe

@@ -66,8 +66,12 @@ jobs:
 
       - name: Upload new artifact
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          VERSION: ${{ steps.release-notes.outputs.tag_name }}
-          FILES: target\x86_64-pc-windows-msvc\release\trees.exe#trees-x86_64-pc-windows-msvc.exe
+          RELEASE_ID: ここにリリースIDを書く
+          FILE_PATH: path\to\your\artifact.zip
+          FILE_NAME: artifact.zip
         run: |
-          gh release upload --clobber ${{ env.VERSION }} ${{ env.FILES }}
+          Write-Host "Uploading new artifact: $env:FILE_NAME"
+
+          # ファイルをバイナリとして読み込み、--data-binary に渡す
+          $fileContent = Get-Content -Path $env:FILE_PATH -Encoding Byte
+          curl -X POST -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" -H "Content-Type: application/zip" --data-binary $fileContent "https://uploads.github.com/repos/${{ github.repository }}/releases/${{ env.RELEASE_ID }}/assets?name=${{ env.FILE_NAME }}"

@@ -10,11 +10,14 @@ use std::{
   process::exit,
   rc::Rc,
 };
+
+use compile::compile;
+
 use walkdir::WalkDir;
 
 use clap::{Parser, ValueEnum};
 
-use crate::compile::{CompileConfig, compile};
+use trees_lang::compile::CompileConfig;
 
 use executor::execute;
 
@@ -40,9 +43,9 @@ impl Cli {
   fn create_compile_config(&self) -> CompileConfig {
     CompileConfig {
       char_width: match self.char_width {
-        CharWidthMode::Mono => crate::compile::CharWidthMode::Mono,
-        CharWidthMode::Half => crate::compile::CharWidthMode::Half,
-        CharWidthMode::Full => crate::compile::CharWidthMode::Full,
+        CharWidthMode::Mono => trees_lang::compile::CharWidthMode::Mono,
+        CharWidthMode::Half => trees_lang::compile::CharWidthMode::Half,
+        CharWidthMode::Full => trees_lang::compile::CharWidthMode::Full,
       },
     }
   }
@@ -256,8 +259,9 @@ fn print_error_rec(tree: &BlockErrorTree, after_exists: &mut Vec<bool>) {
 mod tests {
   use std::{cell::RefCell, rc::Rc};
 
+  use trees_lang::compile::CompileConfig;
+
   use crate::{
-    compile::{self, CompileConfig},
     executor::execute_with_mock,
     structs::{BlockError, Literal},
   };
@@ -271,7 +275,7 @@ mod tests {
     });
     let cmd_executor = Box::new(|_, _| panic!());
 
-    let result = compile::compile(
+    let result = crate::compile::compile(
       vec![
         "        ┌─────┐      ".to_owned(),
         "        │print│      ".to_owned(),
@@ -327,7 +331,7 @@ mod tests {
     });
 
     let code_lines: Vec<String> = code.split('\n').map(|c| c.to_owned()).collect();
-    let returning = compile::compile(code_lines, config).and_then(|b| {
+    let returning = crate::compile::compile(code_lines, config).and_then(|b| {
       execute_with_mock(
         b,
         Box::new(|| panic!()),
@@ -462,7 +466,7 @@ mod tests {
   #[test]
   fn char_half() {
     let mut config = CompileConfig::DEFAULT.clone();
-    config.char_width = crate::compile::CharWidthMode::Half;
+    config.char_width = trees_lang::compile::CharWidthMode::Half;
     let ExectuedResult { returning, stdout, .. } =
       exec_file_with_config(include_str!("test/helloworld_half.tr"), &config);
     assert_eq!(returning, Ok(Literal::Void));
@@ -472,7 +476,7 @@ mod tests {
   #[test]
   fn char_full() {
     let mut config = CompileConfig::DEFAULT.clone();
-    config.char_width = crate::compile::CharWidthMode::Full;
+    config.char_width = trees_lang::compile::CharWidthMode::Full;
     let ExectuedResult { returning, stdout, .. } =
       exec_file_with_config(include_str!("test/helloworld_full.tr"), &config);
     assert_eq!(returning, Ok(Literal::Void));

@@ -27,7 +27,7 @@ $ git clone https://github.com/Snowman-s/Trees.git
 
 $ cd Trees
 
-$ cargo build --release
+$ cargo build --release --all
 ```
 
 上記コマンドを実行すると、`target/release` 内に実行可能ファイルができているはずです。

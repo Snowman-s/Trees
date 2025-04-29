@@ -30,12 +30,12 @@ jobs:
         
       - name: Build
         run: |
-          cargo build --release --target x86_64-pc-windows-msvc
+          cargo build --release --all --target x86_64-pc-windows-msvc
 
       - name: Extract Cargo.toml version
         id: cargo_version
         run: |
-          $version = Select-String -Path "Cargo.toml" -Pattern '^version\s*=\s*".*"' | ForEach-Object { $_.Matches.Groups[0].Value -replace '^version\s*=\s*"(.*)"', '$1' }
+          $version = Select-String -Path "trees/Cargo.toml" -Pattern '^version\s*=\s*".*"' | ForEach-Object { $_.Matches.Groups[0].Value -replace '^version\s*=\s*"(.*)"', '$1' }
           echo "CARGO_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8
 
       - name: Generate release notes

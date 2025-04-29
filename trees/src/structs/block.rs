@@ -1,17 +1,12 @@
-use super::{exec_env::ExecuteScope, literal::BlockLiteral, ExecuteEnv, Literal};
+use trees_lang::compile::QuoteStyle;
+
+use super::{ExecuteEnv, Literal, exec_env::ExecuteScope, literal::BlockLiteral};
 
 #[derive(PartialEq, Eq, Debug, Clone)]
 pub struct Block {
   pub proc_name: String,
   pub args: Vec<(bool, Box<Block>)>,
   pub quote: QuoteStyle,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum QuoteStyle {
-  Quote,
-  Closure,
-  None,
 }
 
 impl Block {

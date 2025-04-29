@@ -1,4 +1,4 @@
-use super::{literal::BlockLiteral, Block, BlockError, Literal};
+use super::{Block, BlockError, Literal, literal::BlockLiteral};
 use regex::Regex;
 use std::{cell::RefCell, collections::HashMap, rc::Rc, sync::OnceLock};
 

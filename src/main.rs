@@ -14,7 +14,7 @@ use walkdir::WalkDir;
 
 use clap::{Parser, ValueEnum};
 
-use crate::compile::{compile, CompileConfig};
+use crate::compile::{CompileConfig, compile};
 
 use executor::execute;
 
@@ -23,7 +23,7 @@ use structs::{Block, BlockError, BlockErrorTree, BlockResult};
 #[derive(Parser)]
 #[command(
   name = "Trees",
-  version = "0.2.2",
+  version = "0.2.3",
   author = "SnowEsamosc <snowman.snowsnow@gmail.com>"
 )]
 struct Cli {
@@ -482,7 +482,7 @@ mod tests {
   mod modules {
     use crate::{
       structs::Literal,
-      tests::{exec_file, ExectuedResult},
+      tests::{ExectuedResult, exec_file},
     };
 
     #[test]

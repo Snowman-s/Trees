@@ -24,6 +24,10 @@ jobs:
 
       - name: Install MSVC toolchain
         run: rustup target add x86_64-pc-windows-msvc
+        
+      - name: Build
+        run: |
+          cargo build --release --target x86_64-pc-windows-msvc
 
       - name: Extract Cargo.toml version
         id: cargo_version
@@ -39,38 +43,70 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build
+      - name: Zip standard Trees library
+        env:
+          lib_name: std_lib.zip
         run: |
-          cargo build --release --target x86_64-pc-windows-msvc
-
-      - name: Delete existing asset if exists
+          $sourceDir = "src-trees"
+          $zipPath = ${{ env.lib_name }}
+      
+          Write-Host "Zipping contents of directory: $sourceDir -> $zipPath"
+      
+          # 既存のZIPを削除
+          if (Test-Path $zipPath) {
+            Remove-Item $zipPath
+          }
+      
+          # ディレクトリ直下の内容を圧縮（ディレクトリそのものではなく中身）
+          Compress-Archive -Path "$sourceDir\*" -DestinationPath $zipPath
+      
+          Write-Host "Zipped successfully."
+          
+      - name: Delete existing assets if they exist
         env:
           RELEASE_ID: ${{ steps.release-notes.outputs.id }}
-          FILE_NAME: trees-x86_64-pc-windows-msvc.exe
+          FILE_NAMES: trees-x86_64-pc-windows-msvc.exe, std_lib.zip
         run: |
-          Write-Host "Checking for existing asset: $env:FILE_NAME"
-
-          # アセット一覧を取得
-          $ASSETS_JSON = curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/${{ github.repository }}/releases/${{ env.RELEASE_ID }}/assets"
-
-          # 同名ファイルのIDを取得
-          $ASSET_ID = ($ASSETS_JSON | ConvertFrom-Json) | Where-Object { $_.name -eq $env:FILE_NAME } | Select-Object -ExpandProperty id
-
-          if ($ASSET_ID) {
-            Write-Host "Existing asset found (ID: $ASSET_ID), deleting..."
-            curl -X DELETE -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" "https://api.github.com/repos/${{ github.repository }}/releases/assets/$ASSET_ID"
-            Write-Host "Deleted asset."
-          } else {
-            Write-Host "No existing asset to delete."
+          $fileNames = $env:FILE_NAMES -split ','
+      
+          foreach ($fileName in $fileNames) {
+            $fileName = $fileName.Trim()
+            Write-Host "Checking for existing asset: $fileName"
+      
+            # アセット一覧を取得
+            $ASSETS_JSON = curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/${{ github.repository }}/releases/${{ env.RELEASE_ID }}/assets"
+      
+            # 同名ファイルのIDを取得
+            $ASSET_ID = ($ASSETS_JSON | ConvertFrom-Json) | Where-Object { $_.name -eq $fileName } | Select-Object -ExpandProperty id
+      
+            if ($ASSET_ID) {
+              Write-Host "Existing asset found (ID: $ASSET_ID), deleting..."
+              curl -X DELETE -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" "https://api.github.com/repos/${{ github.repository }}/releases/assets/$ASSET_ID"
+              Write-Host "Deleted asset: $fileName"
+            } else {
+              Write-Host "No existing asset to delete: $fileName"
+            }
           }
 
-      - name: Upload new artifact
+      - name: Upload new artifacts
         env:
           RELEASE_ID: ${{ steps.release-notes.outputs.id }}
-          FILE_NAME: trees-x86_64-pc-windows-msvc.exe
-          FILE_PATH: target/x86_64-pc-windows-msvc/release/trees.exe
+          FILE_NAMES: trees-x86_64-pc-windows-msvc.exe,std_lib.zip
+          FILE_PATHS: target/x86_64-pc-windows-msvc/release/trees.exe,std_lib.zip
         run: |
-          Write-Host "Uploading new artifact: $env:FILE_NAME"
-
-          # ファイルをバイナリとして読み込み、--data-binary に渡す
-          curl -X POST -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" -H "Content-Type: application/exe" --data-binary @${{ env.FILE_PATH }} "https://uploads.github.com/repos/${{ github.repository }}/releases/${{ env.RELEASE_ID }}/assets?name=${{ env.FILE_NAME }}"
+          $fileNames = $env:FILE_NAMES -split ','
+          $filePaths = $env:FILE_PATHS -split ','
+      
+          for ($i = 0; $i -lt $fileNames.Length; $i++) {
+            $fileName = $fileNames[$i].Trim()
+            $filePath = $filePaths[$i].Trim()
+      
+            Write-Host "Uploading new artifact: $fileName from $filePath"
+      
+            # ファイルをバイナリとして読み込み、アップロード
+            curl -X POST `
+              -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" `
+              -H "Content-Type: application/octet-stream" `
+              --data-binary "@$filePath" `
+              "https://uploads.github.com/repos/${{ github.repository }}/releases/${{ env.RELEASE_ID }}/assets?name=$fileName"
+          }

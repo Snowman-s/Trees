@@ -1,5 +1,8 @@
-use compile::{compile, CompileConfig};
-use executor::execute;
+mod compile;
+mod executor;
+mod intermed_repr;
+mod structs;
+
 use std::{
   fs::File,
   io::{Read, Write},
@@ -7,17 +10,15 @@ use std::{
   process::exit,
   rc::Rc,
 };
-use structs::{Block, BlockError, BlockErrorTree};
 use walkdir::WalkDir;
 
-use crate::structs::BlockResult;
-
-mod compile;
-mod executor;
-mod intermed_repr;
-mod structs;
-
 use clap::{Parser, ValueEnum};
+
+use crate::compile::{compile, CompileConfig};
+
+use executor::execute;
+
+use structs::{Block, BlockError, BlockErrorTree, BlockResult};
 
 #[derive(Parser)]
 #[command(

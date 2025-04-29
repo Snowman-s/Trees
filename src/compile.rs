@@ -1,11 +1,12 @@
 use std::cmp::Ordering;
 
-use crate::structs::{Block, QuoteStyle};
 use unicode_width::UnicodeWidthStr;
+
+use crate::structs::{Block, QuoteStyle};
 
 #[derive(Debug, Clone)]
 pub struct CompileConfig {
-  pub(crate) char_width: CharWidthMode,
+  pub char_width: CharWidthMode,
 }
 
 #[derive(Debug, Clone)]
@@ -19,22 +20,22 @@ pub enum CharWidthMode {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct CodeCharacter {
+pub struct CodeCharacter {
   char: String,
   x: usize,
   len: usize,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct SplitedCode {
+pub struct SplitedCode {
   body: Vec<Vec<CodeCharacter>>,
 }
 
 impl SplitedCode {
-  fn get(&self, x: usize, y: usize) -> Option<CodeCharacter> {
+  pub fn get(&self, x: usize, y: usize) -> Option<CodeCharacter> {
     self.body.get(y)?.iter().find(|cc| cc.x == x).cloned()
   }
-  fn get_slice_of_line(&self, x_min_exclusive: usize, x_max_exclusive: usize, y: usize) -> Option<String> {
+  pub fn get_slice_of_line(&self, x_min_exclusive: usize, x_max_exclusive: usize, y: usize) -> Option<String> {
     let (mut index, _) = self.body.get(y)?.iter().enumerate().find(|(_index, cc)| cc.x == x_min_exclusive)?;
     let mut return_str = "".to_string();
 
@@ -55,12 +56,12 @@ impl SplitedCode {
     Some(return_str.to_string())
   }
 
-  fn left_x(&self, x: usize, y: usize) -> Option<usize> {
+  pub fn left_x(&self, x: usize, y: usize) -> Option<usize> {
     let index =
       self.body.get(y)?.iter().enumerate().find_map(|(index, cc)| if cc.x == x { Some(index) } else { None })?;
     self.body.get(y)?.get(index - 1).map(|cc| cc.x)
   }
-  fn right_x(&self, x: usize, y: usize) -> Option<usize> {
+  pub fn right_x(&self, x: usize, y: usize) -> Option<usize> {
     let index =
       self.body.get(y)?.iter().enumerate().find_map(|(index, cc)| if cc.x == x { Some(index) } else { None })?;
     self.body.get(y)?.get(index + 1).map(|cc| cc.x)
@@ -92,7 +93,7 @@ impl SplitedCode {
       },
     });
   }
-  fn new_line(&mut self) {
+  pub fn new_line(&mut self) {
     self.body.push(vec![]);
   }
 
@@ -106,23 +107,23 @@ impl SplitedCode {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct CompilingBlock {
-  proc_name: String,
-  x: usize,
-  y: usize,
-  width: usize,
-  height: usize,
-  block_plug: Option<BlockPlug>,
-  arg_plugs: Vec<ArgPlug>,
-  args: Vec<(bool, usize)>,
+pub struct CompilingBlock {
+  pub proc_name: String,
+  pub x: usize,
+  pub y: usize,
+  pub width: usize,
+  pub height: usize,
+  pub block_plug: Option<BlockPlug>,
+  pub arg_plugs: Vec<ArgPlug>,
+  pub args: Vec<(bool, usize)>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct ArgPlug {
-  x: usize,
-  y: usize,
-  expand: bool,
-  ori: Orientation,
+pub struct ArgPlug {
+  pub x: usize,
+  pub y: usize,
+  pub expand: bool,
+  pub ori: Orientation,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -133,14 +134,14 @@ struct Edge {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct BlockPlug {
-  x: usize,
-  y: usize,
-  quote: QuoteStyle,
+pub struct BlockPlug {
+  pub x: usize,
+  pub y: usize,
+  pub quote: QuoteStyle,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-enum Orientation {
+pub enum Orientation {
   Up,
   Left,
   Right,
@@ -326,7 +327,7 @@ fn find_a_block(code: &SplitedCode, x: usize, y: usize, _config: &CompileConfig)
   })
 }
 
-fn find_blocks(splited_code: &SplitedCode, config: &CompileConfig) -> Vec<CompilingBlock> {
+pub fn find_blocks(splited_code: &SplitedCode, config: &CompileConfig) -> Vec<CompilingBlock> {
   let mut blocks: Vec<CompilingBlock> = vec![];
 
   for y in 0..splited_code.len_y() {
@@ -398,7 +399,11 @@ fn find_next_edge(code: &SplitedCode, x: &usize, y: &usize, ori: &Orientation) -
   }
 }
 
-fn connect_blocks(code: &SplitedCode, blocks: &mut [CompilingBlock], _config: &CompileConfig) -> Result<Block, String> {
+pub fn connect_blocks(
+  code: &SplitedCode,
+  blocks: &mut [CompilingBlock],
+  config: &CompileConfig,
+) -> Result<CompilingBlock, String> {
   let blocks_cloned = blocks.to_owned();
 
   let head_candinates: Vec<usize> = blocks
@@ -452,10 +457,10 @@ fn connect_blocks(code: &SplitedCode, blocks: &mut [CompilingBlock], _config: &C
     }
   }
 
-  Ok(blocks[head].to_block(blocks))
+  Ok(blocks[head].clone())
 }
 
-fn split_code(code: &Vec<String>, config: &CompileConfig) -> SplitedCode {
+pub fn split_code(code: &Vec<String>, config: &CompileConfig) -> SplitedCode {
   let mut splited_code = SplitedCode::new();
 
   for line in code {
@@ -471,12 +476,14 @@ fn split_code(code: &Vec<String>, config: &CompileConfig) -> SplitedCode {
   splited_code
 }
 
-pub fn compile(code: Vec<String>, config: &CompileConfig) -> Result<Block, String> {
+pub(crate) fn compile(code: Vec<String>, config: &CompileConfig) -> Result<Block, String> {
   let splited_code = split_code(&code, config);
 
   let mut blocks = find_blocks(&splited_code, config);
 
-  connect_blocks(&splited_code, &mut blocks, config)
+  let head_compiling_block = connect_blocks(&splited_code, &mut blocks, config)?;
+
+  Ok(head_compiling_block.to_block(&blocks))
 }
 
 #[cfg(test)]

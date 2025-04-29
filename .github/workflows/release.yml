@@ -48,7 +48,7 @@ jobs:
           lib_name: std_lib.zip
         run: |
           $sourceDir = "src-trees"
-          $zipPath = ${{ env.lib_name }}
+          $zipPath = "${{ env.lib_name }}"
       
           Write-Host "Zipping contents of directory: $sourceDir -> $zipPath"
       

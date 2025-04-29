@@ -1,0 +1,19 @@
+[package]
+name = "trees-lang"
+version = "0.2.4"
+edition = "2024"
+
+authors = ["Snowman-s"]
+description = "Official impl of Trees (programming-language), supporting only parsing code now"
+
+license = "MIT"
+
+keywords = ["trees", "program", "language", "parser"]
+categories = ["parser-implementations"]
+
+documentation = "https://docs.rs/trees-lang/"
+homepage = "https://crates.io/crates/trees-lang"
+repository = "https://github.com/Snowman-s/Trees"
+
+[dependencies]
+unicode-width = "0.2.0"

@@ -333,30 +333,36 @@ fn find_a_block(code: &SplitedCode, x: usize, y: usize, _config: &CompileConfig)
   // 1から始める
   let mut width1 = code.right_x(x, y)? - x;
   while char_is_in(width1, 0, &["─", "┴", "•", "/"])? {
-    match char(width1, 0)?.as_str() {
-      "┴" => {
-        up_plug = Some(BlockPlug {
-          x: x + width1,
-          y,
-          quote: QuoteStyle::None,
-        });
+    if char_is_in(width1, 0, &["┴", "•", "/"])? {
+      if up_plug.is_some() {
+        return None;
       }
-      "•" => {
-        up_plug = Some(BlockPlug {
-          x: x + width1,
-          y,
-          quote: QuoteStyle::Quote,
-        });
+      match char(width1, 0)?.as_str() {
+        "┴" => {
+          up_plug = Some(BlockPlug {
+            x: x + width1,
+            y,
+            quote: QuoteStyle::None,
+          });
+        }
+        "•" => {
+          up_plug = Some(BlockPlug {
+            x: x + width1,
+            y,
+            quote: QuoteStyle::Quote,
+          });
+        }
+        "/" => {
+          up_plug = Some(BlockPlug {
+            x: x + width1,
+            y,
+            quote: QuoteStyle::Closure,
+          });
+        }
+        _ => {}
       }
-      "/" => {
-        up_plug = Some(BlockPlug {
-          x: x + width1,
-          y,
-          quote: QuoteStyle::Closure,
-        });
-      }
-      _ => {}
     }
+
     width1 += cc(width1, 0)?.len;
   }
   if char(width1, 0)? != "┐" {
@@ -1070,5 +1076,24 @@ mod tests {
         dangling_position: (8, 5)
       })))
     );
+  }
+
+  #[test]
+  fn ignore_two_block_plug() {
+    let code = vec![
+      "    ".to_owned(),
+      "    ┌───────┐".to_owned(),
+      "    │ abc   │    ".to_owned(),
+      "    └───────┘   ".to_owned(),
+      "           ".to_owned(),
+      "    ┌──┴┴──┐".to_owned(),
+      "    │ def  │    ".to_owned(),
+      "    └──────┘   ".to_owned(),
+    ];
+
+    let splited_code = split_code(&code, &CompileConfig::DEFAULT);
+    let blocks = find_blocks(&splited_code, &CompileConfig::DEFAULT);
+
+    assert_eq!(blocks.len(), 1);
   }
 }

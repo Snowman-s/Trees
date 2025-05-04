@@ -650,7 +650,9 @@ pub fn split_code(code: &Vec<String>, config: &CompileConfig) -> SplitedCode {
 mod tests {
   use crate::compile::{
     ArgPlug, BlockPlug, CodeCharacter, CompileConfig, CompilingBlock, Edge, EdgeFragment, Orientation, QuoteStyle,
-    SplitedCode, find_a_block, find_blocks,
+    SplitedCode,
+    errors::{self, CompileError},
+    find_a_block, find_blocks,
   };
 
   use super::{connect_blocks, split_code};
@@ -1007,5 +1009,66 @@ mod tests {
         }]
       }
     )
+  }
+
+  #[test]
+  fn error_non_unique_start_block() {
+    let code = vec![
+      "    ".to_owned(),
+      "    ┌───────┐".to_owned(),
+      "    │ abc   │    ".to_owned(),
+      "    └───────┘   ".to_owned(),
+      "    ┌──────┐".to_owned(),
+      "    │ def  │    ".to_owned(),
+      "    └──────┘   ".to_owned(),
+    ];
+
+    let splited_code = split_code(&code, &CompileConfig::DEFAULT);
+    let mut blocks = find_blocks(&splited_code, &CompileConfig::DEFAULT);
+
+    let result = connect_blocks(&splited_code, &mut blocks, &CompileConfig::DEFAULT);
+
+    assert_eq!(
+      result,
+      Err(CompileError::NonUniqueStartBlock(Box::new(
+        errors::NonUniqueStartBlockError {
+          candinates: vec![blocks[0].clone(), blocks[1].clone()],
+        }
+      )))
+    );
+  }
+
+  #[test]
+  fn error_dangling_arg_edge() {
+    let code = vec![
+      "    ".to_owned(),
+      "    ┌───────┐".to_owned(),
+      "    │ abc   │    ".to_owned(),
+      "    └───┬───┘   ".to_owned(),
+      "        │   ".to_owned(),
+      "               ".to_owned(),
+      "    ┌───┴──┐".to_owned(),
+      "    │ def  │    ".to_owned(),
+      "    └──────┘   ".to_owned(),
+    ];
+
+    let splited_code = split_code(&code, &CompileConfig::DEFAULT);
+    let mut blocks = find_blocks(&splited_code, &CompileConfig::DEFAULT);
+
+    let result = connect_blocks(&splited_code, &mut blocks, &CompileConfig::DEFAULT);
+
+    assert_eq!(
+      result,
+      Err(CompileError::DanglingArgEdge(Box::new(errors::DanglingArgEdgeError {
+        block_of_arg_plug: blocks[0].clone(),
+        arg_plug: blocks[0].arg_plugs[0].clone(),
+        edge_fragments: vec![EdgeFragment {
+          x: 8,
+          y: 4,
+          ori: Orientation::Down
+        }],
+        dangling_position: (8, 5)
+      })))
+    );
   }
 }

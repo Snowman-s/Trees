@@ -2,18 +2,18 @@ use std::{error::Error, fmt};
 
 use super::{ArgPlug, CompilingBlock, EdgeFragment};
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum CompileError {
   NonUniqueStartBlock(Box<NonUniqueStartBlockError>),
   DanglingArgEdge(Box<DanglingArgEdgeError>),
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct NonUniqueStartBlockError {
   pub candinates: Vec<CompilingBlock>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct DanglingArgEdgeError {
   pub block_of_arg_plug: CompilingBlock,
   pub arg_plug: ArgPlug,

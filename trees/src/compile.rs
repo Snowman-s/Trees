@@ -32,7 +32,7 @@ pub fn compile(code: Vec<String>, config: &CompileConfig) -> Result<Block, Strin
 
   let mut blocks = find_blocks(&splited_code, config);
 
-  let head_compiling_block = connect_blocks(&splited_code, &mut blocks, config)?;
+  let head_compiling_block = connect_blocks(&splited_code, &mut blocks, config).map_err(|err| err.to_string())?;
 
   Ok(compiling_block_to_block(&head_compiling_block, &blocks))
 }

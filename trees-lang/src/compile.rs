@@ -1,5 +1,8 @@
+mod errors;
+
 use std::cmp::Ordering;
 
+use errors::CompileError;
 use unicode_width::UnicodeWidthStr;
 
 /// Stores settings used during code compilation.
@@ -550,7 +553,7 @@ pub fn connect_blocks(
   code: &SplitedCode,
   blocks: &mut [CompilingBlock],
   config: &CompileConfig,
-) -> Result<CompilingBlock, String> {
+) -> Result<CompilingBlock, CompileError> {
   let blocks_cloned = blocks.to_owned();
 
   let head_candinates: Vec<usize> = blocks
@@ -560,10 +563,11 @@ pub fn connect_blocks(
     .collect();
 
   if head_candinates.len() != 1 {
-    return Err(format!(
-      "The code must have exact one block which has no block-plug. Found {}.",
-      head_candinates.len()
-    ));
+    return Err(CompileError::NonUniqueStartBlock(Box::new(
+      errors::NonUniqueStartBlockError {
+        candinates: head_candinates.iter().map(|i| blocks[*i].clone()).collect(),
+      },
+    )));
   }
   let head = head_candinates[0];
 
@@ -604,7 +608,12 @@ pub fn connect_blocks(
             false
           }
         })
-        .ok_or(format!("No block-plug found at ({}, {})", mut_x, mut_y))?;
+        .ok_or(CompileError::DanglingArgEdge(Box::new(errors::DanglingArgEdgeError {
+          block_of_arg_plug: block.clone(),
+          arg_plug: arg_plug.clone(),
+          edge_fragments: fragments.clone(),
+          dangling_position: (mut_x, mut_y),
+        })))?;
 
       block.args.push(Edge {
         block_index_of_arg_plug: block_index,
@@ -641,7 +650,9 @@ pub fn split_code(code: &Vec<String>, config: &CompileConfig) -> SplitedCode {
 mod tests {
   use crate::compile::{
     ArgPlug, BlockPlug, CodeCharacter, CompileConfig, CompilingBlock, Edge, EdgeFragment, Orientation, QuoteStyle,
-    SplitedCode, find_a_block, find_blocks,
+    SplitedCode,
+    errors::{self, CompileError},
+    find_a_block, find_blocks,
   };
 
   use super::{connect_blocks, split_code};
@@ -998,5 +1009,66 @@ mod tests {
         }]
       }
     )
+  }
+
+  #[test]
+  fn error_non_unique_start_block() {
+    let code = vec![
+      "    ".to_owned(),
+      "    ┌───────┐".to_owned(),
+      "    │ abc   │    ".to_owned(),
+      "    └───────┘   ".to_owned(),
+      "    ┌──────┐".to_owned(),
+      "    │ def  │    ".to_owned(),
+      "    └──────┘   ".to_owned(),
+    ];
+
+    let splited_code = split_code(&code, &CompileConfig::DEFAULT);
+    let mut blocks = find_blocks(&splited_code, &CompileConfig::DEFAULT);
+
+    let result = connect_blocks(&splited_code, &mut blocks, &CompileConfig::DEFAULT);
+
+    assert_eq!(
+      result,
+      Err(CompileError::NonUniqueStartBlock(Box::new(
+        errors::NonUniqueStartBlockError {
+          candinates: vec![blocks[0].clone(), blocks[1].clone()],
+        }
+      )))
+    );
+  }
+
+  #[test]
+  fn error_dangling_arg_edge() {
+    let code = vec![
+      "    ".to_owned(),
+      "    ┌───────┐".to_owned(),
+      "    │ abc   │    ".to_owned(),
+      "    └───┬───┘   ".to_owned(),
+      "        │   ".to_owned(),
+      "               ".to_owned(),
+      "    ┌───┴──┐".to_owned(),
+      "    │ def  │    ".to_owned(),
+      "    └──────┘   ".to_owned(),
+    ];
+
+    let splited_code = split_code(&code, &CompileConfig::DEFAULT);
+    let mut blocks = find_blocks(&splited_code, &CompileConfig::DEFAULT);
+
+    let result = connect_blocks(&splited_code, &mut blocks, &CompileConfig::DEFAULT);
+
+    assert_eq!(
+      result,
+      Err(CompileError::DanglingArgEdge(Box::new(errors::DanglingArgEdgeError {
+        block_of_arg_plug: blocks[0].clone(),
+        arg_plug: blocks[0].arg_plugs[0].clone(),
+        edge_fragments: vec![EdgeFragment {
+          x: 8,
+          y: 4,
+          ori: Orientation::Down
+        }],
+        dangling_position: (8, 5)
+      })))
+    );
   }
 }

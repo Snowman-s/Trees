@@ -1,4 +1,5 @@
-mod errors;
+/// Module containing error types for the compiler.
+pub mod errors;
 
 use std::cmp::Ordering;
 
@@ -246,7 +247,7 @@ pub struct ArgPlug {
   pub x: usize,
   /// Y position of the plug.
   pub y: usize,
-  /// Whether the argument plug supports expansion (variadic).
+  /// Whether the argument plug is expand or not. (Typically "@").
   pub expand: bool,
   /// Orientation of the plug (direction from which argument connects).
   pub ori: Orientation,

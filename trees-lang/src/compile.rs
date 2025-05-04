@@ -225,9 +225,15 @@ pub struct CompilingBlock {
   pub height: usize,
   /// Optional block plug for connecting this block to others.
   pub block_plug: Option<BlockPlug>,
+  /// Edge connecting block-plug of this block to another block.
+  ///
+  /// This is setted by `connect_blocks` function. Before that, it is empty.
+  pub connect_from: Option<Edge>,
   /// Argument plugs for this block.
   pub arg_plugs: Vec<ArgPlug>,
   /// Edges (connections) representing the arguments passed to this block.
+  ///
+  /// This is setted by `connect_blocks` function. Before that, it is empty.
   pub args: Vec<Edge>,
 }
 
@@ -473,6 +479,7 @@ fn find_a_block(code: &SplitedCode, x: usize, y: usize, _config: &CompileConfig)
     width: width1 + cc(width1, 0)?.len,
     height: height1 + 1,
     block_plug: up_plug,
+    connect_from: None,
     arg_plugs,
   })
 }
@@ -577,6 +584,9 @@ pub fn connect_blocks(
   }
   let head = head_candinates[0];
 
+  // 借用権をかわすため、connect_fromは後から入れる。
+  let mut deferred_connections = Vec::new();
+
   for (block_index, block) in blocks.iter_mut().enumerate() {
     for arg_plug in block.arg_plugs.iter() {
       let ArgPlug { x, y, ori, .. } = arg_plug;
@@ -621,13 +631,23 @@ pub fn connect_blocks(
           dangling_position: (mut_x, mut_y),
         })))?;
 
-      block.args.push(Edge {
+      let connect_edge = Edge {
         block_index_of_arg_plug: block_index,
         arg_plug_info: arg_plug.clone(),
         fragments,
         block_index_of_block_plug: arg_block_index,
-      });
+      };
+
+      block.args.push(connect_edge.clone());
+
+      // connect_fromをセット
+      deferred_connections.push((arg_block_index, connect_edge.clone()));
     }
+  }
+
+  for (arg_block_index, connect_edge) in deferred_connections {
+    let block = &mut blocks[arg_block_index];
+    block.connect_from = Some(connect_edge);
   }
 
   Ok(blocks[head].clone())
@@ -751,6 +771,7 @@ mod tests {
         width: 7,
         height: 3,
         block_plug: None,
+        connect_from: None,
         arg_plugs: vec![],
         args: vec![]
       }),
@@ -787,6 +808,7 @@ mod tests {
         width: 10,
         height: 3,
         block_plug: None,
+        connect_from: None,
         arg_plugs: vec![],
         args: vec![]
       }),
@@ -823,6 +845,7 @@ mod tests {
           width: 9,
           height: 3,
           block_plug: None,
+          connect_from: None,
           arg_plugs: vec![ArgPlug {
             x: 8,
             y: 3,
@@ -842,6 +865,7 @@ mod tests {
             y: 4,
             quote: QuoteStyle::None
           }),
+          connect_from: None,
           arg_plugs: vec![],
           args: vec![]
         }
@@ -880,6 +904,7 @@ mod tests {
           width: 9,
           height: 3,
           block_plug: None,
+          connect_from: None,
           arg_plugs: vec![ArgPlug {
             x: 8,
             y: 3,
@@ -899,6 +924,7 @@ mod tests {
             y: 4,
             quote: QuoteStyle::None
           }),
+          connect_from: None,
           arg_plugs: vec![],
           args: vec![]
         }
@@ -937,6 +963,7 @@ mod tests {
           width: 12,
           height: 3,
           block_plug: None,
+          connect_from: None,
           arg_plugs: vec![ArgPlug {
             x: 8,
             y: 3,
@@ -956,6 +983,7 @@ mod tests {
             y: 4,
             quote: QuoteStyle::None
           }),
+          connect_from: None,
           arg_plugs: vec![],
           args: vec![]
         }
@@ -983,6 +1011,22 @@ mod tests {
     let mut blocks = find_blocks(&splited_code, &CompileConfig::DEFAULT);
     let head = connect_blocks(&splited_code, &mut blocks, &CompileConfig::DEFAULT).unwrap();
 
+    let arg_edge = Edge {
+      block_index_of_arg_plug: 0,
+      arg_plug_info: ArgPlug {
+        x: 8,
+        y: 3,
+        expand: false,
+        ori: Orientation::Down,
+      },
+      fragments: vec![EdgeFragment {
+        x: 8,
+        y: 4,
+        ori: Orientation::Down,
+      }],
+      block_index_of_block_plug: 1,
+    };
+
     assert_eq!(
       head,
       CompilingBlock {
@@ -992,29 +1036,35 @@ mod tests {
         width: 9,
         height: 3,
         block_plug: None,
+        connect_from: None,
         arg_plugs: vec![ArgPlug {
           x: 8,
           y: 3,
           expand: false,
           ori: Orientation::Down
         }],
-        args: vec![Edge {
-          block_index_of_arg_plug: 0,
-          arg_plug_info: ArgPlug {
-            x: 8,
-            y: 3,
-            expand: false,
-            ori: Orientation::Down
-          },
-          fragments: vec![EdgeFragment {
-            x: 8,
-            y: 4,
-            ori: Orientation::Down
-          }],
-          block_index_of_block_plug: 1
-        }]
+        args: vec![arg_edge.clone()]
       }
-    )
+    );
+
+    assert_eq!(
+      blocks[1],
+      CompilingBlock {
+        proc_name: "def".to_owned(),
+        x: 4,
+        y: 5,
+        width: 8,
+        height: 3,
+        block_plug: Some(BlockPlug {
+          x: 8,
+          y: 5,
+          quote: QuoteStyle::None
+        }),
+        connect_from: Some(arg_edge),
+        arg_plugs: vec![],
+        args: vec![]
+      }
+    );
   }
 
   #[test]

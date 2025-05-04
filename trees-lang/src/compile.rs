@@ -1,5 +1,8 @@
+mod errors;
+
 use std::cmp::Ordering;
 
+use errors::CompileError;
 use unicode_width::UnicodeWidthStr;
 
 /// Stores settings used during code compilation.
@@ -550,7 +553,7 @@ pub fn connect_blocks(
   code: &SplitedCode,
   blocks: &mut [CompilingBlock],
   config: &CompileConfig,
-) -> Result<CompilingBlock, String> {
+) -> Result<CompilingBlock, CompileError> {
   let blocks_cloned = blocks.to_owned();
 
   let head_candinates: Vec<usize> = blocks
@@ -560,10 +563,11 @@ pub fn connect_blocks(
     .collect();
 
   if head_candinates.len() != 1 {
-    return Err(format!(
-      "The code must have exact one block which has no block-plug. Found {}.",
-      head_candinates.len()
-    ));
+    return Err(CompileError::NonUniqueStartBlock(Box::new(
+      errors::NonUniqueStartBlockError {
+        candinates: head_candinates.iter().map(|i| blocks[*i].clone()).collect(),
+      },
+    )));
   }
   let head = head_candinates[0];
 
@@ -604,7 +608,12 @@ pub fn connect_blocks(
             false
           }
         })
-        .ok_or(format!("No block-plug found at ({}, {})", mut_x, mut_y))?;
+        .ok_or(CompileError::DanglingArgEdge(Box::new(errors::DanglingArgEdgeError {
+          block_of_arg_plug: block.clone(),
+          arg_plug: arg_plug.clone(),
+          edge_fragments: fragments.clone(),
+          dangling_position: (mut_x, mut_y),
+        })))?;
 
       block.args.push(Edge {
         block_index_of_arg_plug: block_index,

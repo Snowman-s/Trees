@@ -14,7 +14,7 @@ Add the following to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-trees-lang = "0.2.4"
+trees-lang = "0.2.5"
 ```
 
 ## Usage
